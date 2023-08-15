@@ -17,6 +17,7 @@ import xyz.cssxsh.mirai.tool.KFCFactory;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 class TheCommand extends TheMcCommand.HasSub {
@@ -201,10 +202,20 @@ class TheCommand extends TheMcCommand.HasSub {
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
                 // 获取最新版本协议
                 plugin.getLogger().info("获取 ANDROID_PAD 最新版本协议信息...");
-                FixProtocolVersion.fetch(BotConfiguration.MiraiProtocol.ANDROID_PAD, "latest");
+                try {
+                    FixProtocolVersion.fetch(BotConfiguration.MiraiProtocol.ANDROID_PAD, "latest");
+                } catch (NoSuchElementException e) {
+                    e.printStackTrace();
+                }
+
                 // 获取最新版本协议
                 plugin.getLogger().info("获取 ANDROID_PHONE 最新版本协议信息...");
-                FixProtocolVersion.fetch(BotConfiguration.MiraiProtocol.ANDROID_PHONE, "latest");
+                try {
+                    FixProtocolVersion.fetch(BotConfiguration.MiraiProtocol.ANDROID_PHONE, "latest");
+                } catch (NoSuchElementException e) {
+                    e.printStackTrace();
+                }
+
 
                 plugin.getLogger().info("更新协议版本...");
                 FixProtocolVersion.update();
