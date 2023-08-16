@@ -15,10 +15,7 @@ import xyz.cssxsh.mirai.tool.FixProtocolVersion;
 import xyz.cssxsh.mirai.tool.KFCFactory;
 
 import java.io.File;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Set;
+import java.util.*;
 
 class TheCommand extends TheMcCommand.HasSub {
 
@@ -98,7 +95,27 @@ class TheCommand extends TheMcCommand.HasSub {
 
         @Override
         public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
-            // todo
+            if (strings.length == 1) {
+                final String arg = strings[0];
+                final LinkedList<String> list = new LinkedList<>();
+                if (arg.isEmpty()) list.add("<完成滑块验证后得到Ticket，请直接复制粘贴>");
+                return list;
+            }
+
+            if (strings.length == 2) {
+                final String arg = strings[1];
+                final LinkedList<String> list = new LinkedList<>();
+                if (arg.isEmpty()) list.add("[要登录的QQ机器人的号码]");
+
+                final Set<Long> waitingSliderIds = plugin.getTheLoginSolver().getWaitingSliderIds();
+
+                for (final Long waitingSliderId : waitingSliderIds) {
+                    final String str = "%d".formatted(waitingSliderId);
+                    if (str.startsWith(arg)) list.add(str);
+                }
+                return list;
+            }
+
             return null;
         }
     }
@@ -156,6 +173,25 @@ class TheCommand extends TheMcCommand.HasSub {
 
         @Override
         public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+            if (strings.length == 1) {
+                final String arg = strings[0];
+                final LinkedList<String> list = new LinkedList<>();
+                if (arg.isEmpty()) list.add("<短信验证码>");
+                return list;
+            }
+
+            if (strings.length == 2) {
+                final String arg = strings[1];
+                final LinkedList<String> list = new LinkedList<>();
+                if (arg.isEmpty()) list.add("[等待短信验证码的QQ机器人号码]");
+
+                final Set<Long> waitingSmsIds = plugin.getTheLoginSolver().getWaitingSmsIds();
+                for (final Long waitingSmsId : waitingSmsIds) {
+                    final String str = "%d".formatted(waitingSmsId);
+                    if (str.startsWith(arg)) list.add(str);
+                }
+                return list;
+            }
             return null;
         }
     }
@@ -258,6 +294,21 @@ class TheCommand extends TheMcCommand.HasSub {
 
         @Override
         public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+
+            if (strings.length == 1) {
+                final String arg = strings[0];
+                final LinkedList<String> list = new LinkedList<>();
+                if (arg.isEmpty()) list.add("<QQ号码>");
+                return list;
+            }
+
+            if (strings.length == 2) {
+                final String arg = strings[1];
+                final LinkedList<String> list = new LinkedList<>();
+                if (arg.isEmpty()) list.add("<QQ密码>");
+                return list;
+            }
+
             return null;
         }
     }
