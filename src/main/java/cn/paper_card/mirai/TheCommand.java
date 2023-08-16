@@ -31,6 +31,7 @@ class TheCommand extends TheMcCommand.HasSub {
         this.addSubCommand(new SliderVerify());
         this.addSubCommand(new SmsVerify());
         this.addSubCommand(new Login());
+        this.addSubCommand(new Logout());
     }
 
     @Override
@@ -309,6 +310,73 @@ class TheCommand extends TheMcCommand.HasSub {
                 return list;
             }
 
+            return null;
+        }
+    }
+
+    class Logout extends TheMcCommand {
+
+        private final @NotNull Permission permission;
+
+        Logout() {
+            super("logout");
+            this.permission = plugin.addPermission(TheCommand.this.permission.getName() + ".logout");
+        }
+
+        @Override
+        protected boolean canNotExecute(@NotNull CommandSender commandSender) {
+            return !commandSender.hasPermission(this.permission);
+        }
+
+        @Override
+        public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+
+            plugin.getTaskScheduler().runTaskAsynchronously(() -> {
+                final String argQq = strings.length > 0 ? strings[0] : null;
+
+                final long qq;
+                if (argQq == null) {
+                    final List<Bot> instances = Bot.getInstances();
+                    if (instances.size() != 1) {
+                        sendError(commandSender, "当QQ机器人数不为1时，你必须指定参数：QQ号码");
+                        return;
+                    }
+                    qq = instances.get(0).getId();
+                } else {
+                    try {
+                        qq = Long.parseLong(argQq);
+                    } catch (NumberFormatException ignored) {
+                        sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argQq));
+                        return;
+                    }
+                }
+
+                final Bot bot = Bot.getInstanceOrNull(qq);
+                if (bot == null) {
+                    sendError(commandSender, "号码为%d的机器人不存在！".formatted(qq));
+                    return;
+                }
+
+                bot.closeAndJoin(null);
+                commandSender.sendMessage(Component.text("已退出机器人：%d".formatted(qq)));
+            });
+
+
+            return true;
+        }
+
+        @Override
+        public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+            if (strings.length == 1) {
+                final String arg = strings[0];
+                final LinkedList<String> list = new LinkedList<>();
+                if (arg.isEmpty()) list.add("<QQ号码>");
+                for (final Bot instance : Bot.getInstances()) {
+                    final String str = "%d".formatted(instance.getId());
+                    if (str.startsWith(arg)) list.add(str);
+                }
+                return list;
+            }
             return null;
         }
     }
