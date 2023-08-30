@@ -4,18 +4,17 @@ import cn.paper_card.mc_command.TheMcCommand;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.mamoe.mirai.Bot;
-import net.mamoe.mirai.BotFactory;
 import net.mamoe.mirai.utils.BotConfiguration;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.permissions.Permission;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import xyz.cssxsh.mirai.tool.FixProtocolVersion;
-import xyz.cssxsh.mirai.tool.KFCFactory;
 
-import java.io.File;
-import java.util.*;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
 
 class TheCommand extends TheMcCommand.HasSub {
 
@@ -32,6 +31,7 @@ class TheCommand extends TheMcCommand.HasSub {
         this.addSubCommand(new SmsVerify());
         this.addSubCommand(new Login());
         this.addSubCommand(new Logout());
+        this.addSubCommand(new AutoLogin());
     }
 
     @Override
@@ -221,11 +221,6 @@ class TheCommand extends TheMcCommand.HasSub {
                 return true;
             }
 
-            if (argPassword == null) {
-                sendError(commandSender, "你必须提供参数：机器人的密码！");
-                return true;
-            }
-
             final long qq;
 
             try {
@@ -237,57 +232,37 @@ class TheCommand extends TheMcCommand.HasSub {
 
 
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
-                // 获取最新版本协议
-                plugin.getLogger().info("获取 ANDROID_PAD 最新版本协议信息...");
-                try {
-                    FixProtocolVersion.fetch(BotConfiguration.MiraiProtocol.ANDROID_PAD, "latest");
-                } catch (NoSuchElementException e) {
-                    e.printStackTrace();
-                }
+                final QqAccountStorageService.AccountInfo accountInfo;
 
-                // 获取最新版本协议
-                plugin.getLogger().info("获取 ANDROID_PHONE 最新版本协议信息...");
-                try {
-                    FixProtocolVersion.fetch(BotConfiguration.MiraiProtocol.ANDROID_PHONE, "latest");
-                } catch (NoSuchElementException e) {
-                    e.printStackTrace();
-                }
-
-
-                plugin.getLogger().info("更新协议版本...");
-                FixProtocolVersion.update();
-
-                final Map<BotConfiguration.MiraiProtocol, String> info = FixProtocolVersion.info();
-                for (BotConfiguration.MiraiProtocol miraiProtocol : info.keySet()) {
-                    final String is = info.get(miraiProtocol);
-                    plugin.getLogger().info("%s: %s".formatted(miraiProtocol.toString(), is));
-                }
-
-                plugin.getLogger().info("安装 KFCFactory...");
-                KFCFactory.install();
-
-                final BotFactory.BotConfigurationLambda botConfigurationLambda = botConfiguration -> {
-                    final File parent = plugin.getDataFolder();
-                    if (!parent.isDirectory() && parent.mkdir()) {
-                        plugin.getLogger().warning("创建文件夹[%s]失败！".formatted(parent.getPath()));
+                if (argPassword == null) {
+                    try {
+                        accountInfo = plugin.getQqAccountStorageService().queryByQq(qq);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        sendError(commandSender, e.toString());
+                        return;
                     }
 
-                    final File dir = new File(plugin.getDataFolder(), argQq);
-                    if (!dir.isDirectory() && !dir.mkdir()) {
-                        plugin.getLogger().warning("创建文件夹[%s]失败！".formatted(dir.getPath()));
+                    if (accountInfo == null) {
+                        sendError(commandSender, "当不提供登录时，该QQ[%d]应该至少成功登录过一次！".formatted(qq));
+                        return;
                     }
 
-                    botConfiguration.setWorkingDir(dir);
-                    botConfiguration.fileBasedDeviceInfo();
-                    botConfiguration.setProtocol(BotConfiguration.MiraiProtocol.ANDROID_PAD);
-                    botConfiguration.setLoginSolver(plugin.getTheLoginSolver());
-                };
+                } else {
 
-                final Bot bot = BotFactory.INSTANCE.newBot(qq, argPassword, botConfigurationLambda);
+                    // 计算密码的MD5并转为HEX
+                    final String md5 = Tool.encodeHex(Tool.md5Digest(argPassword.getBytes(StandardCharsets.UTF_8)));
 
-                plugin.getLogger().info("登录QQ机器人[%d]...".formatted(qq));
+                    accountInfo = new QqAccountStorageService.AccountInfo(
+                            qq,
+                            md5,
+                            BotConfiguration.MiraiProtocol.ANDROID_PAD.name(),
+                            System.currentTimeMillis(),
+                            false
+                    );
+                }
 
-                bot.login();
+                plugin.doLogin(commandSender, accountInfo);
             });
 
             return true;
@@ -300,13 +275,29 @@ class TheCommand extends TheMcCommand.HasSub {
                 final String arg = strings[0];
                 final LinkedList<String> list = new LinkedList<>();
                 if (arg.isEmpty()) list.add("<QQ号码>");
+
+                final List<Long> qqs;
+
+                try {
+                    qqs = plugin.getQqAccountStorageService().queryAllAccountsQq();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    sendError(commandSender, e.toString());
+                    return list;
+                }
+
+                for (final Long qq : qqs) {
+                    final String str = "%d".formatted(qq);
+                    if (str.startsWith(arg)) list.add(str);
+                }
                 return list;
             }
+
 
             if (strings.length == 2) {
                 final String arg = strings[1];
                 final LinkedList<String> list = new LinkedList<>();
-                if (arg.isEmpty()) list.add("<QQ密码>");
+                if (arg.isEmpty()) list.add("[QQ密码]");
                 return list;
             }
 
@@ -378,6 +369,110 @@ class TheCommand extends TheMcCommand.HasSub {
                 return list;
             }
             return null;
+        }
+    }
+
+    class AutoLogin extends TheMcCommand.HasSub {
+
+        private final @NotNull Permission permission;
+
+        protected AutoLogin() {
+            super("auto-login");
+            this.permission = plugin.addPermission(TheCommand.this.permission.getName() + ".auto-login");
+
+            this.addSubCommand(new AddRemove(true));
+            this.addSubCommand(new AddRemove(false));
+        }
+
+        @Override
+        protected boolean canNotExecute(@NotNull CommandSender commandSender) {
+            return !commandSender.hasPermission(this.permission);
+        }
+
+
+        class AddRemove extends TheMcCommand {
+
+
+            private final @NotNull Permission permission;
+
+            private final boolean isAdd;
+
+            protected AddRemove(boolean isAdd) {
+                super(isAdd ? "add" : "remove");
+                this.permission = plugin.addPermission(AutoLogin.this.permission.getName() + "." + this.getLabel());
+                this.isAdd = isAdd;
+            }
+
+            @Override
+            protected boolean canNotExecute(@NotNull CommandSender commandSender) {
+                return !commandSender.hasPermission(this.permission);
+            }
+
+            @Override
+            public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+                // <QQ>
+
+                final String argQq = strings.length > 0 ? strings[0] : null;
+
+                if (argQq == null) {
+                    sendError(commandSender, "你必须提供参数：QQ号码！");
+                    return true;
+                }
+
+                final long qq;
+
+                try {
+                    qq = Long.parseLong(argQq);
+                } catch (NumberFormatException ignored) {
+                    sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argQq));
+                    return true;
+                }
+
+
+                boolean ok;
+                try {
+                    ok = plugin.getQqAccountStorageService().setAutoLogin(qq, this.isAdd);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    sendError(commandSender, e.toString());
+                    return true;
+                }
+
+                if (!ok) {
+                    commandSender.sendMessage(Component.text("QQ[%d]应该至少成功登录过一次！".formatted(qq)));
+                    return true;
+                }
+
+                commandSender.sendMessage(Component.text("已%sQQ[%d]的自动登录".formatted(this.isAdd ? "开启" : "关闭", qq)));
+
+                return true;
+            }
+
+            @Override
+            public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+                if (strings.length == 1) {
+                    final String arg = strings[0];
+                    final LinkedList<String> list = new LinkedList<>();
+                    if (arg.isEmpty()) list.add("<成功登录过的QQ号码>");
+
+                    final List<Long> qqs;
+
+                    try {
+                        qqs = plugin.getQqAccountStorageService().queryAllAccountsQq();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        sendError(commandSender, e.toString());
+                        return list;
+                    }
+
+                    for (final Long qq : qqs) {
+                        final String str = "%d".formatted(qq);
+                        if (str.startsWith(arg)) list.add(str);
+                    }
+                    return list;
+                }
+                return null;
+            }
         }
     }
 
