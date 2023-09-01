@@ -2,6 +2,7 @@ package cn.paper_card.mirai;
 
 import cn.paper_card.mc_command.TheMcCommand;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.mamoe.mirai.Bot;
 import net.mamoe.mirai.utils.BotConfiguration;
@@ -32,6 +33,7 @@ class TheCommand extends TheMcCommand.HasSub {
         this.addSubCommand(new Login());
         this.addSubCommand(new Logout());
         this.addSubCommand(new AutoLogin());
+        this.addSubCommand(new ListAll());
     }
 
     @Override
@@ -473,6 +475,77 @@ class TheCommand extends TheMcCommand.HasSub {
                 }
                 return null;
             }
+        }
+    }
+
+    class ListAll extends TheMcCommand {
+
+        private final @NotNull Permission permission;
+
+        protected ListAll() {
+            super("list");
+            this.permission = plugin.addPermission(TheCommand.this.permission.getName() + "." + this.getLabel());
+        }
+
+        @Override
+        protected boolean canNotExecute(@NotNull CommandSender commandSender) {
+            return !commandSender.hasPermission(this.permission);
+        }
+
+        @Override
+        public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+
+            final List<QqAccountStorageService.AccountInfo> list;
+
+            try {
+                list = plugin.getQqAccountStorageService().queryAllAccounts();
+            } catch (Exception e) {
+                e.printStackTrace();
+                sendError(commandSender, e.toString());
+                return true;
+            }
+
+            if (list.size() == 0) {
+                commandSender.sendMessage(Component.text("没有任何一个成功登录过的QQ机器人"));
+                return true;
+            }
+
+            final TextComponent.Builder text = Component.text();
+            text.append(Component.text("QQ机器人: \n"));
+
+            int i = 1;
+            for (final QqAccountStorageService.AccountInfo info : list) {
+                String state;
+                final Bot bot = Bot.findInstance(info.qq());
+                if (bot == null) {
+                    state = "未登录";
+                } else {
+                    if (bot.isOnline()) {
+                        state = "在线";
+                    } else {
+                        state = "离线";
+                    }
+                }
+
+                if (info.autoLogin()) {
+                    state = state + " (自动登录)";
+                }
+
+                text.append(Component.text("%d. %d %s".formatted(
+                        i, info.qq(), state
+                )));
+
+                ++i;
+            }
+
+            commandSender.sendMessage(text.build());
+
+            return true;
+        }
+
+        @Override
+        public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+            return null;
         }
     }
 

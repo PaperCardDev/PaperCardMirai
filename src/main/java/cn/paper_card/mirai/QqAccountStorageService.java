@@ -83,6 +83,13 @@ class QqAccountStorageService {
         }
     }
 
+    @NotNull List<AccountInfo> queryAllAccounts() throws Exception {
+        synchronized (this) {
+            final Table t = this.getTable();
+            return t.queryAllAccounts();
+        }
+    }
+
     @Nullable AccountInfo queryByQq(long qq) throws Exception {
         synchronized (this) {
             final Table t = this.getTable();
@@ -139,6 +146,8 @@ class QqAccountStorageService {
 
         private final PreparedStatement statementQueryAutoLogin;
 
+        private final PreparedStatement statementQueryAll;
+
         private final PreparedStatement statementUpdateAutoLogin;
 
         private final PreparedStatement statementQueryAllQq;
@@ -157,6 +166,10 @@ class QqAccountStorageService {
 
                 this.statementQueryAutoLogin = connection.prepareStatement
                         ("SELECT qq, password_md5, protocol, time, auto_login FROM %s WHERE auto_login=?".formatted(NAME));
+
+                this.statementQueryAll = connection.prepareStatement
+                        ("SELECT qq, password_md5, protocol, time, auto_login FROM %s".formatted(NAME));
+
 
                 this.statementQueryByQq = connection.prepareStatement
                         ("SELECT qq, password_md5, protocol, time, auto_login FROM %s WHERE qq=?".formatted(NAME));
@@ -279,6 +292,12 @@ class QqAccountStorageService {
             final PreparedStatement ps = this.statementQueryAutoLogin;
             ps.setInt(1, 1);
             final ResultSet resultSet = ps.executeQuery();
+            return this.parseAll(resultSet);
+        }
+
+        @NotNull List<AccountInfo> queryAllAccounts() throws SQLException {
+            final ResultSet resultSet = this.statementQueryAll.executeQuery();
+
             return this.parseAll(resultSet);
         }
 
