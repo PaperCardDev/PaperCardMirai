@@ -12,26 +12,29 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.permissions.Permission;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import xyz.cssxsh.mirai.tool.FixProtocolVersion;
 import xyz.cssxsh.mirai.tool.KFCFactory;
 
 import java.io.File;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
 @SuppressWarnings("unused")
 public final class PaperCardMirai extends JavaPlugin {
 
-    private final @NotNull TheLoginSolver theLoginSolver;
 
     private final @NotNull TaskScheduler taskScheduler;
 
     private final @NotNull QqAccountStorageService qqAccountStorageService;
 
+    private final @NotNull HashMap<Long, TheLoginSolver2> loginSolvers;
+
     public PaperCardMirai() {
-        this.theLoginSolver = new TheLoginSolver(this);
         this.taskScheduler = UniversalScheduler.getScheduler(this);
         this.qqAccountStorageService = new QqAccountStorageService(this);
+        this.loginSolvers = new HashMap<>();
     }
 
 
@@ -44,30 +47,33 @@ public final class PaperCardMirai extends JavaPlugin {
         command.setTabCompleter(theCommand);
 
         // 自动登录
+        final List<QqAccountStorageService.AccountInfo> ais;
 
-        this.taskScheduler.runTaskAsynchronously(() -> {
+        try {
+            ais = getQqAccountStorageService().queryAutoLoginAccounts();
+        } catch (Exception e) {
+            getLogger().severe(e.toString());
+            e.printStackTrace();
+            return;
+        }
 
-            final List<QqAccountStorageService.AccountInfo> ais;
-
-            try {
-                ais = getQqAccountStorageService().queryAutoLoginAccounts();
-            } catch (Exception e) {
-                getLogger().severe(e.toString());
-                e.printStackTrace();
-                return;
-            }
-
-            for (QqAccountStorageService.AccountInfo ai : ais) {
-                doLogin(getServer().getConsoleSender(), ai);
-            }
-        });
-
+        for (QqAccountStorageService.AccountInfo ai : ais) {
+            this.taskScheduler.runTaskAsynchronously(() -> doLogin(getServer().getConsoleSender(), ai));
+        }
     }
 
     @Override
     public void onDisable() {
 
         this.qqAccountStorageService.destroy();
+
+        synchronized (this.loginSolvers) {
+            for (TheLoginSolver2 value : this.loginSolvers.values()) {
+                if (value == null) continue;
+                value.notifyClose();
+            }
+            this.loginSolvers.clear();
+        }
 
         for (Bot instance : Bot.getInstances()) {
             instance.closeAndJoin(null);
@@ -93,14 +99,23 @@ public final class PaperCardMirai extends JavaPlugin {
         sender.sendMessage(Component.text("FixProtocolVersion更新协议版本..."));
         FixProtocolVersion.update();
 
-        final Map<BotConfiguration.MiraiProtocol, String> info = FixProtocolVersion.info();
-        for (BotConfiguration.MiraiProtocol miraiProtocol : info.keySet()) {
-            final String is = info.get(miraiProtocol);
-            sender.sendMessage(Component.text("%s: %s".formatted(miraiProtocol.toString(), is)));
-        }
+        final String protocolInfo = FixProtocolVersion.info().get(protocol);
+        sender.sendMessage(Component.text("%s: %s".formatted(protocol.toString(), protocolInfo)));
 
         sender.sendMessage(Component.text("安装 KFCFactory..."));
         KFCFactory.install();
+
+        // 登录解决器
+        final TheLoginSolver2 solver;
+        synchronized (this.loginSolvers) {
+            final TheLoginSolver2 solver2 = this.loginSolvers.get(accountInfo.qq());
+            if (solver2 != null) {
+                solver2.notifyClose();
+            }
+            solver = new TheLoginSolver2(sender, accountInfo.qq());
+            this.loginSolvers.put(accountInfo.qq(), solver2);
+        }
+
 
         final PaperCardMirai plugin = this;
 
@@ -120,7 +135,8 @@ public final class PaperCardMirai extends JavaPlugin {
             botConfiguration.setWorkingDir(dir);
             botConfiguration.fileBasedDeviceInfo();
             botConfiguration.setProtocol(protocol);
-            botConfiguration.setLoginSolver(plugin.getTheLoginSolver());
+
+            botConfiguration.setLoginSolver(solver);
         };
 
         // 将MD5转为字节数组
@@ -150,6 +166,46 @@ public final class PaperCardMirai extends JavaPlugin {
         } catch (RuntimeException e) {
             sender.sendMessage(Component.text("登录QQ[%d]失败: %s".formatted(accountInfo.qq(), e.toString())).color(NamedTextColor.DARK_RED));
         }
+
+        synchronized (this.loginSolvers) {
+            this.loginSolvers.remove(accountInfo.qq());
+        }
+    }
+
+    @NotNull List<TheLoginSolver2> getWaitingSliderLoginSolvers() {
+        final LinkedList<TheLoginSolver2> list = new LinkedList<>();
+
+        synchronized (this.loginSolvers) {
+            for (final TheLoginSolver2 value : this.loginSolvers.values()) {
+                if (value == null) continue;
+                if (value.isWaitingSliderVerify()) {
+                    list.add(value);
+                }
+            }
+        }
+
+        return list;
+    }
+
+    @NotNull List<TheLoginSolver2> getWaitingSmsLoginSolvers() {
+        final LinkedList<TheLoginSolver2> list = new LinkedList<>();
+
+        synchronized (this.loginSolvers) {
+            for (TheLoginSolver2 value : this.loginSolvers.values()) {
+                if (value == null) continue;
+                if (value.isWaitingSmsCode()) {
+                    list.add(value);
+                }
+            }
+        }
+
+        return list;
+    }
+
+    @Nullable TheLoginSolver2 getLoginSolver(long qq) {
+        synchronized (this.loginSolvers) {
+            return this.loginSolvers.get(qq);
+        }
     }
 
 
@@ -159,9 +215,6 @@ public final class PaperCardMirai extends JavaPlugin {
         return permission;
     }
 
-    @NotNull TheLoginSolver getTheLoginSolver() {
-        return this.theLoginSolver;
-    }
 
     @NotNull TaskScheduler getTaskScheduler() {
         return this.taskScheduler;

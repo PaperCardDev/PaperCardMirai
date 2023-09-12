@@ -15,7 +15,6 @@ import org.jetbrains.annotations.Nullable;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
 
 class TheCommand extends TheMcCommand.HasSub {
 
@@ -72,13 +71,25 @@ class TheCommand extends TheMcCommand.HasSub {
             }
 
             final long botId;
+            final TheLoginSolver2 solver;
+
             if (argBotId == null) {
-                final Set<Long> waitingSliderIds = plugin.getTheLoginSolver().getWaitingSliderIds();
-                if (waitingSliderIds.size() != 1) {
+                final List<TheLoginSolver2> waitingSliderLoginSolvers = plugin.getWaitingSliderLoginSolvers();
+
+                final int size = waitingSliderLoginSolvers.size();
+
+                if (size == 0) {
+                    sendError(commandSender, "当前没有任何一个登录解决器在等待滑块验证！");
+                    return true;
+                }
+
+                if (size != 1) {
                     sendError(commandSender, "当等待滑块验证的机器人数不为1时，你必须指定机器人QQ号码！");
                     return true;
                 }
-                botId = waitingSliderIds.toArray(new Long[1])[0];
+
+                solver = waitingSliderLoginSolvers.get(0);
+                botId = solver.getQq();
             } else {
 
                 try {
@@ -87,10 +98,17 @@ class TheCommand extends TheMcCommand.HasSub {
                     sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argBotId));
                     return true;
                 }
+
+                solver = plugin.getLoginSolver(botId);
             }
 
 
-            plugin.getTheLoginSolver().setSliderResultAndNotify(botId, argTicket);
+            if (solver == null) {
+                sendError(commandSender, "该QQ[%d]的登录解决器不存在！".formatted(botId));
+                return true;
+            }
+
+            solver.setSliderResultAndNotify(argTicket);
 
             commandSender.sendMessage(Component.text("您已提交滑块验证结果"));
             return true;
@@ -110,10 +128,10 @@ class TheCommand extends TheMcCommand.HasSub {
                 final LinkedList<String> list = new LinkedList<>();
                 if (arg.isEmpty()) list.add("[要登录的QQ机器人的号码]");
 
-                final Set<Long> waitingSliderIds = plugin.getTheLoginSolver().getWaitingSliderIds();
+                final List<TheLoginSolver2> waitingSliderLoginSolvers = plugin.getWaitingSliderLoginSolvers();
 
-                for (final Long waitingSliderId : waitingSliderIds) {
-                    final String str = "%d".formatted(waitingSliderId);
+                for (final TheLoginSolver2 solver : waitingSliderLoginSolvers) {
+                    final String str = "%d".formatted(solver.getQq());
                     if (str.startsWith(arg)) list.add(str);
                 }
                 return list;
@@ -148,13 +166,25 @@ class TheCommand extends TheMcCommand.HasSub {
             }
 
             final long botId;
+            final TheLoginSolver2 solver;
+
+
             if (argId == null) {
-                final Set<Long> waitingSliderIds = plugin.getTheLoginSolver().getWaitingSmsIds();
-                if (waitingSliderIds.size() != 1) {
+                final List<TheLoginSolver2> waitingSmsLoginSolvers = plugin.getWaitingSmsLoginSolvers();
+
+                if (waitingSmsLoginSolvers.size() == 0) {
+                    sendError(commandSender, "没有任何一个登录解决器在等待短信验证码！");
+                    return true;
+                }
+
+                if (waitingSmsLoginSolvers.size() != 1) {
                     sendError(commandSender, "当等待短信验证码的机器人数不为1时，你必须指定机器人QQ号码！");
                     return true;
                 }
-                botId = waitingSliderIds.toArray(new Long[1])[0];
+
+
+                solver = waitingSmsLoginSolvers.get(0);
+                botId = solver.getQq();
 
             } else {
 
@@ -164,10 +194,17 @@ class TheCommand extends TheMcCommand.HasSub {
                     sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argId));
                     return true;
                 }
+
+                solver = plugin.getLoginSolver(botId);
             }
 
 
-            plugin.getTheLoginSolver().setSmsResultAndNotify(botId, argCode);
+            if (solver == null) {
+                sendError(commandSender, "QQ[%d]没有登录解决器！".formatted(botId));
+                return true;
+            }
+
+            solver.setSmsResultAndNotify(argCode);
 
             commandSender.sendMessage(Component.text("你已提交短信验证码"));
 
@@ -188,9 +225,9 @@ class TheCommand extends TheMcCommand.HasSub {
                 final LinkedList<String> list = new LinkedList<>();
                 if (arg.isEmpty()) list.add("[等待短信验证码的QQ机器人号码]");
 
-                final Set<Long> waitingSmsIds = plugin.getTheLoginSolver().getWaitingSmsIds();
-                for (final Long waitingSmsId : waitingSmsIds) {
-                    final String str = "%d".formatted(waitingSmsId);
+                final List<TheLoginSolver2> waitingSmsLoginSolvers = plugin.getWaitingSmsLoginSolvers();
+                for (final TheLoginSolver2 solver : waitingSmsLoginSolvers) {
+                    final String str = "%d".formatted(solver.getQq());
                     if (str.startsWith(arg)) list.add(str);
                 }
                 return list;
@@ -534,6 +571,7 @@ class TheCommand extends TheMcCommand.HasSub {
                 text.append(Component.text("%d. %d %s".formatted(
                         i, info.qq(), state
                 )));
+                text.append(Component.newline());
 
                 ++i;
             }
