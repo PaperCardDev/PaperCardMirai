@@ -75,9 +75,31 @@ public final class PaperCardMirai extends JavaPlugin {
             this.loginSolvers.clear();
         }
 
-        for (Bot instance : Bot.getInstances()) {
-            instance.closeAndJoin(null);
+        final Object lock = new Object();
+
+        new Thread(() -> {
+            for (Bot instance : Bot.getInstances()) {
+                // 会阻塞
+                instance.closeAndJoin(null);
+            }
+
+            synchronized (lock) {
+                lock.notifyAll();
+            }
+
+        }).start();
+
+        synchronized (lock) {
+            getLogger().info("等待QQ机器人关闭，5秒后将强制关闭...");
+            try {
+                lock.wait(5 * 1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
+
+        getLogger().info("GoodBye!");
+
     }
 
     void doLogin(@NotNull CommandSender sender, @NotNull QqAccountStorageService.AccountInfo accountInfo) {
@@ -108,12 +130,12 @@ public final class PaperCardMirai extends JavaPlugin {
         // 登录解决器
         final TheLoginSolver2 solver;
         synchronized (this.loginSolvers) {
-            final TheLoginSolver2 solver2 = this.loginSolvers.get(accountInfo.qq());
-            if (solver2 != null) {
-                solver2.notifyClose();
+            final TheLoginSolver2 s = this.loginSolvers.get(accountInfo.qq());
+            if (s != null) {
+                s.notifyClose();
             }
             solver = new TheLoginSolver2(sender, accountInfo.qq());
-            this.loginSolvers.put(accountInfo.qq(), solver2);
+            this.loginSolvers.put(accountInfo.qq(), solver);
         }
 
 
