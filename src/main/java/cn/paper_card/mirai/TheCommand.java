@@ -3,7 +3,10 @@ package cn.paper_card.mirai;
 import cn.paper_card.mc_command.TheMcCommand;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.mamoe.mirai.Bot;
 import net.mamoe.mirai.utils.BotConfiguration;
 import org.bukkit.command.Command;
@@ -33,6 +36,11 @@ class TheCommand extends TheMcCommand.HasSub {
         this.addSubCommand(new Logout());
         this.addSubCommand(new AutoLogin());
         this.addSubCommand(new ListAll());
+        this.addSubCommand(new Reload());
+        this.addSubCommand(new Remark());
+        this.addSubCommand(new Ip());
+        this.addSubCommand(new Delete());
+        this.addSubCommand(new DeviceCommand(plugin));
     }
 
     @Override
@@ -40,8 +48,23 @@ class TheCommand extends TheMcCommand.HasSub {
         return !commandSender.hasPermission(this.permission);
     }
 
-    private static void sendError(@NotNull CommandSender sender, @NotNull String error) {
-        sender.sendMessage(Component.text(error).color(NamedTextColor.DARK_RED));
+    void tabCompleteAllQqs(@NotNull List<String> list, @NotNull String arg) {
+
+        if (arg.isEmpty()) list.add("<成功登录过的QQ号码>");
+
+        final List<Long> qqs;
+
+        try {
+            qqs = plugin.getAccountStorage().queryAllQqs();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return;
+        }
+
+        for (final Long qq : qqs) {
+            final String str = "%d".formatted(qq);
+            if (str.startsWith(arg)) list.add(str);
+        }
     }
 
     class SliderVerify extends TheMcCommand {
@@ -66,7 +89,7 @@ class TheCommand extends TheMcCommand.HasSub {
             final String argBotId = strings.length > 1 ? strings[1] : null;
 
             if (argTicket == null) {
-                sendError(commandSender, "你必须提供参数：完成滑块验证后得到的Ticket");
+                plugin.sendError(commandSender, "你必须提供参数：完成滑块验证后得到的Ticket");
                 return true;
             }
 
@@ -79,12 +102,12 @@ class TheCommand extends TheMcCommand.HasSub {
                 final int size = waitingSliderLoginSolvers.size();
 
                 if (size == 0) {
-                    sendError(commandSender, "当前没有任何一个登录解决器在等待滑块验证！");
+                    plugin.sendError(commandSender, "当前没有任何一个登录解决器在等待滑块验证！");
                     return true;
                 }
 
                 if (size != 1) {
-                    sendError(commandSender, "当等待滑块验证的机器人数不为1时，你必须指定机器人QQ号码！");
+                    plugin.sendError(commandSender, "当等待滑块验证的机器人数不为1时，你必须指定机器人QQ号码！");
                     return true;
                 }
 
@@ -95,7 +118,7 @@ class TheCommand extends TheMcCommand.HasSub {
                 try {
                     botId = Long.parseLong(argBotId);
                 } catch (NumberFormatException ignored) {
-                    sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argBotId));
+                    plugin.sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argBotId));
                     return true;
                 }
 
@@ -104,13 +127,13 @@ class TheCommand extends TheMcCommand.HasSub {
 
 
             if (solver == null) {
-                sendError(commandSender, "该QQ[%d]的登录解决器不存在！".formatted(botId));
+                plugin.sendError(commandSender, "该QQ[%d]的登录解决器不存在！".formatted(botId));
                 return true;
             }
 
             solver.setSliderResultAndNotify(argTicket);
 
-            commandSender.sendMessage(Component.text("您已提交滑块验证结果"));
+            plugin.sendInfo(commandSender, "您已提交滑块验证结果");
             return true;
         }
 
@@ -161,7 +184,7 @@ class TheCommand extends TheMcCommand.HasSub {
             final String argId = strings.length > 1 ? strings[1] : null;
 
             if (argCode == null) {
-                sendError(commandSender, "你必须提供参数：短信验证码");
+                plugin.sendError(commandSender, "你必须提供参数：短信验证码");
                 return true;
             }
 
@@ -173,12 +196,12 @@ class TheCommand extends TheMcCommand.HasSub {
                 final List<TheLoginSolver2> waitingSmsLoginSolvers = plugin.getWaitingSmsLoginSolvers();
 
                 if (waitingSmsLoginSolvers.size() == 0) {
-                    sendError(commandSender, "没有任何一个登录解决器在等待短信验证码！");
+                    plugin.sendError(commandSender, "没有任何一个登录解决器在等待短信验证码！");
                     return true;
                 }
 
                 if (waitingSmsLoginSolvers.size() != 1) {
-                    sendError(commandSender, "当等待短信验证码的机器人数不为1时，你必须指定机器人QQ号码！");
+                    plugin.sendError(commandSender, "当等待短信验证码的机器人数不为1时，你必须指定机器人QQ号码！");
                     return true;
                 }
 
@@ -191,7 +214,7 @@ class TheCommand extends TheMcCommand.HasSub {
                 try {
                     botId = Long.parseLong(argId);
                 } catch (NumberFormatException ignored) {
-                    sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argId));
+                    plugin.sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argId));
                     return true;
                 }
 
@@ -200,13 +223,13 @@ class TheCommand extends TheMcCommand.HasSub {
 
 
             if (solver == null) {
-                sendError(commandSender, "QQ[%d]没有登录解决器！".formatted(botId));
+                plugin.sendError(commandSender, "QQ[%d]没有登录解决器！".formatted(botId));
                 return true;
             }
 
             solver.setSmsResultAndNotify(argCode);
 
-            commandSender.sendMessage(Component.text("你已提交短信验证码"));
+            plugin.sendInfo(commandSender, "你已提交短信验证码");
 
             return true;
         }
@@ -242,7 +265,7 @@ class TheCommand extends TheMcCommand.HasSub {
 
         protected Login() {
             super("login");
-            this.permission = plugin.addPermission(TheCommand.this.permission.getName() + ".login");
+            this.permission = plugin.addPermission(TheCommand.this.permission.getName() + "." + this.getLabel());
         }
 
         @Override
@@ -254,9 +277,10 @@ class TheCommand extends TheMcCommand.HasSub {
         public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
             final String argQq = strings.length > 0 ? strings[0] : null;
             final String argPassword = strings.length > 1 ? strings[1] : null;
+            final String argProtocol = strings.length > 2 ? strings[2] : null;
 
             if (argQq == null) {
-                sendError(commandSender, "你必须提供参数：机器人的QQ号码！");
+                plugin.sendError(commandSender, "你必须提供参数：机器人的QQ号码！");
                 return true;
             }
 
@@ -265,25 +289,25 @@ class TheCommand extends TheMcCommand.HasSub {
             try {
                 qq = Long.parseLong(argQq);
             } catch (NumberFormatException e) {
-                sendError(commandSender, "%s 不是正确的QQ号码！".formatted(argQq));
+                plugin.sendError(commandSender, "%s 不是正确的QQ号码！".formatted(argQq));
                 return true;
             }
 
-
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
-                final QqAccountStorageService.AccountInfo accountInfo;
+                final PaperCardMiraiApi.AccountInfo accountInfo;
 
+                // 没有指定密码，从数据库中查询
                 if (argPassword == null) {
                     try {
-                        accountInfo = plugin.getQqAccountStorageService().queryByQq(qq);
+                        accountInfo = plugin.getAccountStorage().queryByQq(qq);
                     } catch (Exception e) {
                         e.printStackTrace();
-                        sendError(commandSender, e.toString());
+                        plugin.sendError(commandSender, e.toString());
                         return;
                     }
 
                     if (accountInfo == null) {
-                        sendError(commandSender, "当不提供登录时，该QQ[%d]应该至少成功登录过一次！".formatted(qq));
+                        plugin.sendError(commandSender, "当不提供密码登录时，该QQ[%d]应该至少成功登录过一次！".formatted(qq));
                         return;
                     }
 
@@ -292,16 +316,20 @@ class TheCommand extends TheMcCommand.HasSub {
                     // 计算密码的MD5并转为HEX
                     final String md5 = Tool.encodeHex(Tool.md5Digest(argPassword.getBytes(StandardCharsets.UTF_8)));
 
-                    accountInfo = new QqAccountStorageService.AccountInfo(
+                    accountInfo = new PaperCardMiraiApi.AccountInfo(
                             qq,
+                            null,
+                            -1,
                             md5,
-                            BotConfiguration.MiraiProtocol.ANDROID_PAD.name(),
-                            System.currentTimeMillis(),
-                            false
+                            argProtocol != null ? argProtocol : BotConfiguration.MiraiProtocol.ANDROID_PHONE.name(),
+                            0,
+                            "",
+                            false,
+                            ""
                     );
                 }
 
-                plugin.doLogin(commandSender, accountInfo);
+                plugin.doLogin(accountInfo, commandSender);
             });
 
             return true;
@@ -318,10 +346,10 @@ class TheCommand extends TheMcCommand.HasSub {
                 final List<Long> qqs;
 
                 try {
-                    qqs = plugin.getQqAccountStorageService().queryAllAccountsQq();
+                    qqs = plugin.getAccountStorage().queryAllQqs();
                 } catch (Exception e) {
                     e.printStackTrace();
-                    sendError(commandSender, e.toString());
+                    plugin.sendError(commandSender, e.toString());
                     return list;
                 }
 
@@ -337,6 +365,19 @@ class TheCommand extends TheMcCommand.HasSub {
                 final String arg = strings[1];
                 final LinkedList<String> list = new LinkedList<>();
                 if (arg.isEmpty()) list.add("[QQ密码]");
+                return list;
+            }
+
+            if (strings.length == 3) {
+                final LinkedList<String> list = new LinkedList<>();
+                final String argPro = strings[2];
+                if (argPro.isEmpty()) list.add("<协议>");
+
+                for (BotConfiguration.MiraiProtocol value : BotConfiguration.MiraiProtocol.values()) {
+                    final String name = value.name();
+                    if (name.startsWith(argPro)) list.add(name);
+                }
+
                 return list;
             }
 
@@ -368,7 +409,7 @@ class TheCommand extends TheMcCommand.HasSub {
                 if (argQq == null) {
                     final List<Bot> instances = Bot.getInstances();
                     if (instances.size() != 1) {
-                        sendError(commandSender, "当QQ机器人数不为1时，你必须指定参数：QQ号码");
+                        plugin.sendError(commandSender, "当QQ机器人数不为1时，你必须指定参数：QQ号码");
                         return;
                     }
                     qq = instances.get(0).getId();
@@ -376,21 +417,20 @@ class TheCommand extends TheMcCommand.HasSub {
                     try {
                         qq = Long.parseLong(argQq);
                     } catch (NumberFormatException ignored) {
-                        sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argQq));
+                        plugin.sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argQq));
                         return;
                     }
                 }
 
                 final Bot bot = Bot.getInstanceOrNull(qq);
                 if (bot == null) {
-                    sendError(commandSender, "号码为%d的机器人不存在！".formatted(qq));
+                    plugin.sendError(commandSender, "号码为%d的机器人不存在！".formatted(qq));
                     return;
                 }
 
                 bot.closeAndJoin(null);
-                commandSender.sendMessage(Component.text("已退出机器人：%d".formatted(qq)));
+                plugin.sendInfo(commandSender, "已退出机器人：%d".formatted(qq));
             });
-
 
             return true;
         }
@@ -431,7 +471,6 @@ class TheCommand extends TheMcCommand.HasSub {
 
         class AddRemove extends TheMcCommand {
 
-
             private final @NotNull Permission permission;
 
             private final boolean isAdd;
@@ -454,7 +493,7 @@ class TheCommand extends TheMcCommand.HasSub {
                 final String argQq = strings.length > 0 ? strings[0] : null;
 
                 if (argQq == null) {
-                    sendError(commandSender, "你必须提供参数：QQ号码！");
+                    plugin.sendError(commandSender, "你必须提供参数：QQ号码！");
                     return true;
                 }
 
@@ -463,26 +502,26 @@ class TheCommand extends TheMcCommand.HasSub {
                 try {
                     qq = Long.parseLong(argQq);
                 } catch (NumberFormatException ignored) {
-                    sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argQq));
+                    plugin.sendError(commandSender, "%s 不是一个正确的QQ号码！".formatted(argQq));
                     return true;
                 }
 
 
                 boolean ok;
                 try {
-                    ok = plugin.getQqAccountStorageService().setAutoLogin(qq, this.isAdd);
+                    ok = plugin.getAccountStorage().setAutoLogin(qq, this.isAdd);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    sendError(commandSender, e.toString());
+                    plugin.sendError(commandSender, e.toString());
                     return true;
                 }
 
                 if (!ok) {
-                    commandSender.sendMessage(Component.text("QQ[%d]应该至少成功登录过一次！".formatted(qq)));
+                    plugin.sendInfo(commandSender, Component.text("QQ[%d]应该至少成功登录过一次！".formatted(qq)));
                     return true;
                 }
 
-                commandSender.sendMessage(Component.text("已%sQQ[%d]的自动登录".formatted(this.isAdd ? "开启" : "关闭", qq)));
+                plugin.sendInfo(commandSender, "已%sQQ[%d]的自动登录".formatted(this.isAdd ? "开启" : "关闭", qq));
 
                 return true;
             }
@@ -497,10 +536,10 @@ class TheCommand extends TheMcCommand.HasSub {
                     final List<Long> qqs;
 
                     try {
-                        qqs = plugin.getQqAccountStorageService().queryAllAccountsQq();
+                        qqs = plugin.getAccountStorage().queryAllQqs();
                     } catch (Exception e) {
                         e.printStackTrace();
-                        sendError(commandSender, e.toString());
+                        plugin.sendError(commandSender, e.toString());
                         return list;
                     }
 
@@ -532,51 +571,351 @@ class TheCommand extends TheMcCommand.HasSub {
         @Override
         public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
 
-            final List<QqAccountStorageService.AccountInfo> list;
+            final String argPage = strings.length > 0 ? strings[0] : null;
+
+            final int pageNo;
+            if (argPage == null) {
+                pageNo = 1;
+            } else {
+                try {
+                    pageNo = Integer.parseInt(argPage);
+                } catch (NumberFormatException e) {
+                    plugin.sendError(commandSender, "%s 不是正确的页码！".formatted(argPage));
+                    return true;
+                }
+            }
+
+            plugin.getTaskScheduler().runTaskAsynchronously(() -> {
+
+                final List<PaperCardMiraiApi.AccountInfo> list;
+                final int pageSize = 1;
+
+                try {
+                    list = plugin.getAccountStorage().queryOrderByTimeDescWithPage(pageSize, pageSize * (pageNo - 1));
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    plugin.sendError(commandSender, e.toString());
+                    return;
+                }
+
+
+                final TextComponent.Builder text = Component.text();
+                text.append(Component.text("---- QQ机器人 | 第%d页 ----".formatted(pageNo)).color(NamedTextColor.GREEN));
+                text.appendNewline();
+
+                final int size = list.size();
+
+                if (size == 0) {
+                    text.append(Component.text("本页没有任何记录啦").color(NamedTextColor.GRAY));
+                    text.appendNewline();
+                } else {
+
+                    final long cur = System.currentTimeMillis();
+
+                    for (final PaperCardMiraiApi.AccountInfo info : list) {
+                        String state;
+                        final Bot bot = Bot.findInstance(info.qq());
+                        final boolean online;
+                        if (bot == null) {
+                            state = "[未登录]";
+                            online = false;
+                        } else {
+                            if (bot.isOnline()) {
+                                state = "[在线]";
+                                online = true;
+                            } else {
+                                state = "[离线]";
+                                online = false;
+                            }
+                        }
+
+                        text.append(Component.text("QQ: "));
+                        text.append(Component.text(info.qq()));
+                        text.appendNewline();
+
+                        text.append(Component.text("昵称: "));
+                        text.append(Component.text(info.nick()));
+                        text.appendNewline();
+
+                        text.append(Component.text("备注: "));
+                        text.append(Component.text(info.remark()));
+                        text.appendNewline();
+
+                        text.append(Component.text("等级: "));
+                        text.append(Component.text(info.level()));
+                        text.appendNewline();
+
+                        text.append(Component.text("状态: "));
+                        text.append(Component.text(state)
+                                .color(NamedTextColor.GRAY).decorate(TextDecoration.UNDERLINED)
+                                .clickEvent(ClickEvent.runCommand("/mirai %s %d".formatted(
+                                        online ? "logout" : "login", info.qq()
+                                )))
+                                .hoverEvent(HoverEvent.showText(Component.text(online ? "点击退出" : "点击登录")))
+                        );
+                        text.appendNewline();
+
+                        text.append(Component.text("协议: "));
+                        text.append(Component.text(info.protocol()));
+                        text.appendNewline();
+
+                        text.append(Component.text("自动登录: "));
+                        text.append(Component.text(info.autoLogin() ? "[开启]" : "[关闭]")
+                                .color(NamedTextColor.GRAY).decorate(TextDecoration.UNDERLINED)
+                                .clickEvent(ClickEvent.runCommand("/mirai auto-login %s %d".formatted(
+                                        info.autoLogin() ? "remove" : "add", info.qq()
+                                )))
+                                .hoverEvent(HoverEvent.showText(Component.text(info.autoLogin() ? "点击关闭自动登录" : "点击开启自动登录")))
+                        );
+                        text.appendNewline();
+
+                        text.append(Component.text("上次登录: "));
+                        text.append(Component.text(plugin.toReadableTime(cur - info.time())));
+                        text.append(Component.text("前"));
+                        text.appendNewline();
+
+                        text.append(Component.text("IP: "));
+                        text.append(Component.text(info.ip()));
+                        text.appendNewline();
+                    }
+
+                }
+
+                final boolean hasPre = pageNo > 1;
+                final boolean noNext = size < pageSize;
+
+                text.append(Component.text("[上一页]")
+                        .color(NamedTextColor.GRAY).decorate(TextDecoration.UNDERLINED)
+                        .hoverEvent(HoverEvent.showText(Component.text(hasPre ? "点击上一页" : "没有上一页啦")))
+                        .clickEvent(hasPre ? ClickEvent.runCommand("/mirai list %d".formatted(pageNo - 1)) : null)
+                );
+                text.appendSpace();
+                text.append(Component.text("[下一页]")
+                        .color(NamedTextColor.GRAY).decorate(TextDecoration.UNDERLINED)
+                        .hoverEvent(HoverEvent.showText(Component.text(noNext ? "没有下一页啦" : "点击下一页")))
+                        .clickEvent(noNext ? null : ClickEvent.runCommand("/mirai list %d".formatted(pageNo + 1)))
+                );
+
+                plugin.sendInfo(commandSender, text.build());
+            });
+
+            return true;
+        }
+
+        @Override
+        public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+            return null;
+        }
+    }
+
+    class Delete extends TheMcCommand {
+
+        private final @NotNull Permission permission;
+
+        protected Delete() {
+            super("delete");
+            this.permission = plugin.addPermission(TheCommand.this.permission.getName() + "." + this.getLabel());
+        }
+
+        @Override
+        protected boolean canNotExecute(@NotNull CommandSender commandSender) {
+            return !commandSender.hasPermission(this.permission);
+        }
+
+        @Override
+        public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+            final String argQq = strings.length > 0 ? strings[0] : null;
+
+            if (argQq == null) {
+                plugin.sendError(commandSender, "你必须提供参数：QQ号码");
+                return true;
+            }
+
+            final long qq;
 
             try {
-                list = plugin.getQqAccountStorageService().queryAllAccounts();
-            } catch (Exception e) {
-                e.printStackTrace();
-                sendError(commandSender, e.toString());
+                qq = Long.parseLong(argQq);
+            } catch (NumberFormatException e) {
+                plugin.sendError(commandSender, "%s 不是正确的QQ号码！".formatted(argQq));
                 return true;
             }
 
-            if (list.size() == 0) {
-                commandSender.sendMessage(Component.text("没有任何一个成功登录过的QQ机器人"));
+            plugin.getTaskScheduler().runTaskAsynchronously(() -> {
+                final boolean ok;
+                try {
+                    ok = plugin.getAccountStorage().deleteByQq(qq);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    plugin.sendError(commandSender, e.toString());
+                    return;
+                }
+
+                if (!ok) {
+                    plugin.sendWarning(commandSender, "删除失败，可能该QQ没有成功登录过一次");
+                    return;
+                }
+
+                plugin.sendInfo(commandSender, "已删除QQ[%d]的记录".formatted(qq));
+            });
+
+            return true;
+        }
+
+        @Override
+        public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+            if (strings.length == 1) {
+                final String arg = strings[0];
+                final LinkedList<String> list = new LinkedList<>();
+                tabCompleteAllQqs(list, arg);
+                return list;
+            }
+            return null;
+        }
+    }
+
+    class Reload extends TheMcCommand {
+
+        private final @NotNull Permission permission;
+
+        protected Reload() {
+            super("reload");
+            this.permission = plugin.addPermission(TheCommand.this.permission.getName() + "." + this.getLabel());
+        }
+
+        @Override
+        protected boolean canNotExecute(@NotNull CommandSender commandSender) {
+            return !commandSender.hasPermission(this.permission);
+        }
+
+        @Override
+        public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+            plugin.reloadConfig();
+            plugin.sendInfo(commandSender, "已重载配置");
+            return true;
+        }
+
+        @Override
+        public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+            return null;
+        }
+    }
+
+    class Remark extends TheMcCommand {
+
+        private final @NotNull Permission permission;
+
+
+        protected Remark() {
+            super("remark");
+            this.permission = plugin.addPermission(TheCommand.this.permission.getName() + "." + this.getLabel());
+        }
+
+        @Override
+        protected boolean canNotExecute(@NotNull CommandSender commandSender) {
+            return !commandSender.hasPermission(this.permission);
+        }
+
+        @Override
+        public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+            // QQ remark
+            final String argQq = strings.length > 0 ? strings[0] : null;
+            final String argRemark = strings.length > 1 ? strings[1] : null;
+
+            if (argQq == null) {
+                plugin.sendError(commandSender, "你必须指定参数：QQ号");
                 return true;
             }
 
-            final TextComponent.Builder text = Component.text();
-            text.append(Component.text("QQ机器人: \n"));
-
-            int i = 1;
-            for (final QqAccountStorageService.AccountInfo info : list) {
-                String state;
-                final Bot bot = Bot.findInstance(info.qq());
-                if (bot == null) {
-                    state = "未登录";
-                } else {
-                    if (bot.isOnline()) {
-                        state = "在线";
-                    } else {
-                        state = "离线";
-                    }
-                }
-
-                if (info.autoLogin()) {
-                    state = state + " (自动登录)";
-                }
-
-                text.append(Component.text("%d. %d %s".formatted(
-                        i, info.qq(), state
-                )));
-                text.append(Component.newline());
-
-                ++i;
+            if (argRemark == null) {
+                plugin.sendError(commandSender, "你必须指定参数：备注信息");
+                return true;
             }
 
-            commandSender.sendMessage(text.build());
+            final long qq;
+
+            try {
+                qq = Long.parseLong(argQq);
+            } catch (NumberFormatException e) {
+                plugin.sendError(commandSender, "%s 不是正确的QQ号码！".formatted(argQq));
+                return true;
+            }
+
+            plugin.getTaskScheduler().runTaskAsynchronously(() -> {
+                boolean ok;
+                try {
+                    ok = plugin.getAccountStorage().setRemark(qq, argRemark);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    plugin.sendError(commandSender, e.toString());
+                    return;
+                }
+
+                if (!ok) {
+                    plugin.sendWarning(commandSender, "设置备注失败，可能该QQ没有成功登录过一次");
+                    return;
+                }
+
+                plugin.sendInfo(commandSender, "已将QQ[%d]的备注设置为：%s".formatted(qq, argRemark));
+            });
+
+            return true;
+        }
+
+        @Override
+        public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+
+            if (strings.length == 1) {
+                final String arg = strings[0];
+                final LinkedList<String> list = new LinkedList<>();
+                tabCompleteAllQqs(list, arg);
+                return list;
+            }
+
+            if (strings.length == 2) {
+                final String argRemark = strings[1];
+                if (argRemark.isEmpty()) {
+                    final LinkedList<String> list = new LinkedList<>();
+                    list.add("<备注>");
+                    return list;
+                }
+                return null;
+            }
+
+            return null;
+        }
+    }
+
+    class Ip extends TheMcCommand {
+
+        private final @NotNull Permission permission;
+
+        protected Ip() {
+            super("ip");
+            this.permission = plugin.addPermission(TheCommand.this.permission.getName() + "." + this.getLabel());
+        }
+
+        @Override
+        protected boolean canNotExecute(@NotNull CommandSender commandSender) {
+            return !commandSender.hasPermission(this.permission);
+        }
+
+        @Override
+        public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
+
+            plugin.sendInfo(commandSender, "正在获取公网IP...");
+
+            plugin.getTaskScheduler().runTaskAsynchronously(() -> {
+                final String ip;
+                try {
+                    ip = plugin.getPublicIp();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    plugin.sendError(commandSender, e.toString());
+                    return;
+                }
+
+                plugin.sendInfo(commandSender, "公网IP为：" + ip);
+            });
 
             return true;
         }
