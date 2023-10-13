@@ -6,6 +6,3 @@ no-network-log: false
 
 # 是否启用自动登录，默认值：false
 auto-login-enable: false
-
-# MySQL最大连接时间，以毫秒为单位，超出该时间后，应该关闭连接并发起新的连接，默认值：1200000（20分钟）
-mysql-max-con-time: 1200000

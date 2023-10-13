@@ -252,6 +252,20 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
         return new File(folder, protocol.name().toLowerCase() + ".json");
     }
 
+    void listBotDirs(@NotNull List<String> list, @NotNull String arg) {
+        final File parent = this.getDataFolder();
+        final File botDir = new File(parent, "bots");
+        if (!botDir.isDirectory()) return;
+
+        final String[] l = botDir.list();
+
+        if (l == null) return;
+
+        for (String s : l) {
+            if (s.startsWith(arg)) list.add(s);
+        }
+    }
+
     @NotNull File getBotWorkingDir(long qq) {
         final File parent = this.getDataFolder();
         if (!parent.isDirectory() && !parent.mkdir()) {

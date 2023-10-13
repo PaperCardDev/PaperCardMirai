@@ -25,6 +25,13 @@ public interface PaperCardMiraiApi {
     ) {
     }
 
+    record DeviceInfo(
+            long qq,
+            String json,
+            String remark
+    ) {
+    }
+
     interface AccountStorage {
 
         // 添加或更新记录
@@ -61,6 +68,14 @@ public interface PaperCardMiraiApi {
         boolean insertOrUpdateByQq(long qq, @NotNull String json) throws Exception;
 
         boolean deleteByQq(long qq) throws Exception;
+
+        boolean setRemark(long qq, @Nullable String remark) throws Exception;
+
+        @NotNull List<Long> queryAllQqs() throws Exception;
+
+        @NotNull List<DeviceInfo> queryAllWithPage(int limit, int offset) throws Exception;
+
+        boolean copyInfo(long src, long dest) throws Exception;
     }
 
     @NotNull DeviceInfoStorage getDeviceInfoStorage();
