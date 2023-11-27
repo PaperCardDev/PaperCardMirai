@@ -97,7 +97,7 @@ class TheCommand extends TheMcCommand.HasSub {
             final TheLoginSolver2 solver;
 
             if (argBotId == null) {
-                final List<TheLoginSolver2> waitingSliderLoginSolvers = plugin.getWaitingSliderLoginSolvers();
+                final List<TheLoginSolver2> waitingSliderLoginSolvers = plugin.getMiraiGo().getWaitingSliderLoginSolvers();
 
                 final int size = waitingSliderLoginSolvers.size();
 
@@ -122,7 +122,7 @@ class TheCommand extends TheMcCommand.HasSub {
                     return true;
                 }
 
-                solver = plugin.getLoginSolver(botId);
+                solver = plugin.getMiraiGo().getLoginSolver(botId);
             }
 
 
@@ -151,7 +151,7 @@ class TheCommand extends TheMcCommand.HasSub {
                 final LinkedList<String> list = new LinkedList<>();
                 if (arg.isEmpty()) list.add("[要登录的QQ机器人的号码]");
 
-                final List<TheLoginSolver2> waitingSliderLoginSolvers = plugin.getWaitingSliderLoginSolvers();
+                final List<TheLoginSolver2> waitingSliderLoginSolvers = plugin.getMiraiGo().getWaitingSliderLoginSolvers();
 
                 for (final TheLoginSolver2 solver : waitingSliderLoginSolvers) {
                     final String str = "%d".formatted(solver.getQq());
@@ -193,7 +193,7 @@ class TheCommand extends TheMcCommand.HasSub {
 
 
             if (argId == null) {
-                final List<TheLoginSolver2> waitingSmsLoginSolvers = plugin.getWaitingSmsLoginSolvers();
+                final List<TheLoginSolver2> waitingSmsLoginSolvers = plugin.getMiraiGo().getWaitingSmsLoginSolvers();
 
                 if (waitingSmsLoginSolvers.size() == 0) {
                     plugin.sendError(commandSender, "没有任何一个登录解决器在等待短信验证码！");
@@ -218,7 +218,7 @@ class TheCommand extends TheMcCommand.HasSub {
                     return true;
                 }
 
-                solver = plugin.getLoginSolver(botId);
+                solver = plugin.getMiraiGo().getLoginSolver(botId);
             }
 
 
@@ -248,7 +248,7 @@ class TheCommand extends TheMcCommand.HasSub {
                 final LinkedList<String> list = new LinkedList<>();
                 if (arg.isEmpty()) list.add("[等待短信验证码的QQ机器人号码]");
 
-                final List<TheLoginSolver2> waitingSmsLoginSolvers = plugin.getWaitingSmsLoginSolvers();
+                final List<TheLoginSolver2> waitingSmsLoginSolvers = plugin.getMiraiGo().getWaitingSmsLoginSolvers();
                 for (final TheLoginSolver2 solver : waitingSmsLoginSolvers) {
                     final String str = "%d".formatted(solver.getQq());
                     if (str.startsWith(arg)) list.add(str);

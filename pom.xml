@@ -112,12 +112,14 @@
             <groupId>net.mamoe</groupId>
             <artifactId>mirai-core-jvm</artifactId>
             <version>2.16.0-RC</version>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
             <groupId>xyz.cssxsh</groupId>
             <artifactId>mirai.tool.fix-protocol-version</artifactId>
             <version>1.12.0</version>
+            <scope>provided</scope>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.asynchttpclient/async-http-client -->
@@ -125,6 +127,7 @@
             <groupId>org.asynchttpclient</groupId>
             <artifactId>async-http-client</artifactId>
             <version>3.0.0.Beta2</version>
+            <scope>provided</scope>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/junit/junit -->
