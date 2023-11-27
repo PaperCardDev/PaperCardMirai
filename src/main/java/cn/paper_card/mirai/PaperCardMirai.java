@@ -3,10 +3,6 @@ package cn.paper_card.mirai;
 import cn.paper_card.database.DatabaseApi;
 import com.github.Anon8281.universalScheduler.UniversalScheduler;
 import com.github.Anon8281.universalScheduler.scheduling.schedulers.TaskScheduler;
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonSyntaxException;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -18,13 +14,12 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
-import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
 import java.net.MalformedURLException;
-import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -43,13 +38,10 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
 
     private final @NotNull DatabaseApi.MySqlConnection mySqlConnection;
 
-    private final @NotNull Gson gson;
 
     private final static String KEY_NO_BOT_LOG = "no-bot-log";
     private final static String KEY_NO_NETWORK_LOG = "no-network-log";
     private final static String KEY_AUTO_LOGIN_ENABLE = "auto-login-enable";
-
-    private final static String KEY_MYSQL_MAX_CON_TIME = "mysql-max-con-time";
 
     private final @NotNull MiraiGo miraiGo;
 
@@ -88,10 +80,10 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
                 .append(Component.text("]").color(NamedTextColor.AQUA))
                 .build();
 
-        this.accountStorage = new AccountStorageImpl(this);
-        this.deviceInfoStorage = new DeviceInfoStorageImpl(this);
 
-        this.gson = new Gson();
+        this.accountStorage = new AccountStorageImpl(this);
+        this.deviceInfoStorage = new DeviceInfoStorageImpl(this.mySqlConnection);
+
     }
 
     @NotNull DatabaseApi.MySqlConnection getMySqlConnection() {
@@ -118,8 +110,22 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
         return this.getConfig().getBoolean(KEY_AUTO_LOGIN_ENABLE, false);
     }
 
-    long getMySqlMaxConTime() {
-        return this.getConfig().getLong(KEY_MYSQL_MAX_CON_TIME, 20 * 60 * 1000L);
+    private void doAutoLogin() {
+        if (!this.isAutoLoginEnable()) return;
+
+        final List<AccountInfo> ais;
+        try {
+            ais = getAccountStorage().queryAutoLoginAccounts();
+        } catch (Exception e) {
+            this.handleException("获取自动登录账号时异常", e);
+            return;
+        }
+
+        int i = 0;
+        for (final AccountInfo ai : ais) {
+            this.taskScheduler.runTaskLaterAsynchronously(() -> doLogin(ai, getServer().getConsoleSender()), i * 1200L);
+            ++i;
+        }
     }
 
     @Override
@@ -133,25 +139,11 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
         this.saveDefaultConfig();
 
         // 自动登录
-        if (this.isAutoLoginEnable()) {
-            final List<PaperCardMiraiApi.AccountInfo> ais;
+        this.doAutoLogin();
+    }
 
-            try {
-                ais = getAccountStorage().queryAutoLoginAccounts();
-            } catch (Exception e) {
-                getLogger().severe(e.toString());
-                e.printStackTrace();
-                return;
-            }
-
-            int i = 0;
-            for (final AccountInfo ai : ais) {
-                this.taskScheduler.runTaskLaterAsynchronously(() -> doLogin(ai, getServer().getConsoleSender()), (i + 1) * 1000L);
-                ++i;
-            }
-        }
-
-
+    void handleException(@NotNull String msg, @NotNull Throwable e) {
+        this.getSLF4JLogger().error(msg, e);
     }
 
     @Override
@@ -160,9 +152,18 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
         try {
             this.accountStorage.closeTable();
         } catch (SQLException e) {
-            this.getLogger().severe(e.toString());
-            e.printStackTrace();
+            this.handleException("关闭accountStorage时异常", e);
         }
+
+        try {
+            this.deviceInfoStorage.close();
+        } catch (SQLException e) {
+            this.handleException("关闭deviceInfoStorage时异常", e);
+        }
+
+        this.miraiGo.close();
+
+        this.taskScheduler.cancelTasks(this);
 
 
         getLogger().info("GoodBye!");
@@ -274,62 +275,6 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
         return string.isEmpty() ? "0秒" : string;
     }
 
-    private void closeInputStream(@NotNull InputStream inputStream, @NotNull InputStreamReader reader,
-                                  @NotNull BufferedReader bufferedReader) throws IOException {
-        IOException exception = null;
-
-        try {
-            bufferedReader.close();
-        } catch (IOException e) {
-            exception = e;
-        }
-
-        try {
-            reader.close();
-        } catch (IOException e) {
-            exception = e;
-        }
-
-
-        try {
-            inputStream.close();
-        } catch (IOException e) {
-            exception = e;
-        }
-
-        if (exception != null) throw exception;
-    }
-
-    @NotNull String readToString(@NotNull File file) throws IOException {
-        final FileInputStream inputStream = new FileInputStream(file);
-
-        final InputStreamReader inputStreamReader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
-
-        final BufferedReader reader = new BufferedReader(inputStreamReader);
-
-        final StringBuilder sb = new StringBuilder();
-
-        String line;
-
-        try {
-            while ((line = reader.readLine()) != null) {
-                sb.append(line);
-                sb.append('\n' );
-            }
-        } catch (IOException e) {
-
-            try {
-                this.closeInputStream(inputStream, inputStreamReader, reader);
-            } catch (IOException ignored) {
-            }
-
-            throw e;
-        }
-
-        this.closeInputStream(inputStream, inputStreamReader, reader);
-
-        return sb.toString();
-    }
 
     void writeString(@NotNull File file, @NotNull String content) throws IOException {
         final FileOutputStream outputStream = new FileOutputStream(file);
@@ -348,77 +293,7 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
     }
 
     @NotNull MiraiGo getMiraiGo() {
-        // todo
-        return null;
-    }
-
-    @NotNull String getPublicIp() throws Exception {
-//        https://openapi.lddgo.net/base/gtool/api/v1/GetIp
-        final URL url;
-        try {
-            url = new URL("https://openapi.lddgo.net/base/gtool/api/v1/GetIp");
-        } catch (MalformedURLException e) {
-            throw new RuntimeException(e);
-        }
-
-        final HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
-
-        connection.setDoInput(true);
-        connection.setDoOutput(false);
-        connection.setConnectTimeout(2000);
-        connection.setReadTimeout(2000);
-
-        connection.connect();
-
-        final InputStream inputStream = connection.getInputStream();
-
-        final InputStreamReader inputStreamReader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
-
-        final BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
-
-
-        final StringBuilder sb = new StringBuilder();
-
-        String line;
-        try {
-            while ((line = bufferedReader.readLine()) != null) {
-                sb.append(line);
-                sb.append('\n' );
-            }
-
-        } catch (IOException e) {
-            try {
-                this.closeInputStream(inputStream, inputStreamReader, bufferedReader);
-            } catch (IOException ignored) {
-            }
-            throw e;
-        }
-
-
-        this.closeInputStream(inputStream, inputStreamReader, bufferedReader);
-
-        connection.disconnect();
-
-        final String json = sb.toString();
-
-        final JsonObject jsonObject;
-        try {
-            jsonObject = this.gson.fromJson(json, JsonObject.class);
-        } catch (JsonSyntaxException e) {
-            throw new Exception("解析JSON时错误！", e);
-        }
-
-
-        final JsonElement code = jsonObject.get("code");
-        if (code == null) throw new Exception("JSON对象中没有code元素！");
-
-        final int codeInt = code.getAsInt();
-
-        if (codeInt != 0) throw new Exception("状态码不为0");
-
-        final JsonObject dataObject = jsonObject.get("data").getAsJsonObject();
-        final JsonElement ipEle = dataObject.get("ip");
-        return ipEle.getAsString();
+        return this.miraiGo;
     }
 
     void sendError(@NotNull CommandSender sender, @NotNull String error) {
@@ -428,6 +303,20 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
                 .append(Component.text(error).color(NamedTextColor.RED))
                 .build()
         );
+    }
+
+    void sendException(@NotNull CommandSender sender, @NotNull Throwable e) {
+        final TextComponent.Builder text = Component.text();
+        text.append(this.prefix);
+        text.appendSpace();
+        text.append(Component.text("==== 异常信息 ===="));
+
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            text.appendNewline();
+            text.append(Component.text(t.toString()).color(NamedTextColor.RED));
+        }
+
+        sender.sendMessage(text.build());
     }
 
     void sendInfo(@NotNull CommandSender sender, @NotNull String info) {

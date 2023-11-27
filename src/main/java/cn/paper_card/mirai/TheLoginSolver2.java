@@ -114,7 +114,7 @@ class TheLoginSolver2 extends LoginSolver {
         final DeviceVerificationRequests.SmsRequest sms = requests.getSms();
 
         if (sms == null) {
-            final String error = "不能支持使用短信验证码进行验证！";
+            final String error = "不支持使用短信验证码进行验证！";
             this.sender.sendMessage(Component.text(error).color(NamedTextColor.DARK_RED));
             throw new UnsupportedOperationException(error);
         }

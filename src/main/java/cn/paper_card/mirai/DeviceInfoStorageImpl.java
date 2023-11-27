@@ -20,26 +20,34 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
 
     private Table table = null;
 
-    DeviceInfoStorageImpl(@NotNull PaperCardMirai plugin) {
-        this.mySqlConnection = plugin.getMySqlConnection();
+    DeviceInfoStorageImpl(@NotNull DatabaseApi.MySqlConnection connection) {
+        this.mySqlConnection = connection;
     }
 
     @NotNull Table getTable() throws SQLException {
         final Connection newCon = this.mySqlConnection.getRowConnection();
-        if (this.connection == null) {
-            this.connection = newCon;
-            if (this.table != null) this.table.close();
-            this.table = new Table(this.connection);
-            return this.table;
-        } else if (this.connection == newCon) {
-            // 连接没有变化
-            return this.table;
-        } else {
-            // 连接变化
-            this.connection = newCon;
-            if (this.table != null) this.table.close();
-            this.table = new Table(this.connection);
-            return this.table;
+
+        if (this.connection != null && this.connection == newCon) return this.table;
+
+        this.connection = newCon;
+        if (this.table != null) this.table.close();
+        this.table = new Table(newCon);
+        return this.table;
+    }
+
+    void close() throws SQLException {
+        synchronized (this.mySqlConnection) {
+            final Table t = this.table;
+
+            if (t == null) {
+                this.connection = null;
+                return;
+            }
+
+            this.connection = null;
+            this.table = null;
+
+            t.close();
         }
     }
 

@@ -26,27 +26,27 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
 
     @NotNull Table getTable() throws SQLException {
         final Connection newCon = this.mySqlConnection.getRowConnection();
-        if (this.connection == null) {
-            this.connection = newCon;
-            if (this.table != null) this.table.close();
-            this.table = new Table(this.connection);
-            return this.table;
-        } else if (this.connection == newCon) {
-            // 连接没有变化
-            return this.table;
-        } else {
-            // 连接变化
-            this.connection = newCon;
-            if (this.table != null) this.table.close();
-            this.table = new Table(this.connection);
-            return this.table;
-        }
+
+        if (this.connection != null && this.connection == newCon) return this.table;
+
+        this.connection = newCon;
+        if (this.table != null) this.table.close();
+        this.table = new Table(newCon);
+        return this.table;
     }
 
     void closeTable() throws SQLException {
-        if (this.table != null) {
-            this.table.close();
+        synchronized (this.mySqlConnection) {
+            final Table t = this.table;
+
+            if (t == null) {
+                this.connection = null;
+                return;
+            }
+
             this.table = null;
+            this.connection = null;
+            t.close();
         }
     }
 

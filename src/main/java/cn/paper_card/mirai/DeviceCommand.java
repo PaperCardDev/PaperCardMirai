@@ -24,6 +24,8 @@ class DeviceCommand extends TheMcCommand.HasSub {
 
     private final @NotNull PaperCardMirai plugin;
 
+    private List<Long> allQqCache = null;
+
     public DeviceCommand(@NotNull PaperCardMirai plugin) {
         super("device");
         this.plugin = plugin;
@@ -41,8 +43,41 @@ class DeviceCommand extends TheMcCommand.HasSub {
         return !commandSender.hasPermission(this.permission);
     }
 
+    @NotNull List<String> tabCompleteAllDeviceQq(@NotNull CommandSender sender, @NotNull String argQq, @NotNull String tip) {
+        final LinkedList<String> list = new LinkedList<>();
+
+        if (argQq.isEmpty()) {
+            list.add(tip);
+            final List<Long> qqs;
+
+            try {
+                qqs = this.plugin.getDeviceInfoStorage().queryAllQqs();
+            } catch (Exception e) {
+                this.plugin.handleException("Tab补全，查询所有设备信息的QQ时异常", e);
+                this.plugin.sendException(sender, e);
+                return list;
+            }
+
+            for (final Long qq : qqs) {
+                final String str = qq.toString();
+                list.add(str);
+            }
+
+            this.allQqCache = qqs;
+        } else {
+            final List<Long> t = this.allQqCache;
+            if (t != null) {
+                for (Long qq : t) {
+                    final String str = qq.toString();
+                    if (str.startsWith(argQq)) list.add(str);
+                }
+            }
+        }
+
+        return list;
+    }
+
     class Delete extends TheMcCommand {
-        private List<Long> allQqs = null;
 
         private final @NotNull Permission permission;
 
@@ -80,8 +115,8 @@ class DeviceCommand extends TheMcCommand.HasSub {
                 try {
                     ok = plugin.getDeviceInfoStorage().deleteByQq(qq);
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    plugin.sendError(commandSender, e.toString());
+                    plugin.handleException("尝试删除QQ[%d]的设备信息时异常".formatted(qq), e);
+                    plugin.sendException(commandSender, e);
                     return;
                 }
 
@@ -100,33 +135,7 @@ class DeviceCommand extends TheMcCommand.HasSub {
         public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
             if (strings.length == 1) {
                 final String argQq = strings[0];
-
-                final LinkedList<String> list = new LinkedList<>();
-
-                if (argQq.isEmpty()) {
-                    list.add("<QQ>");
-                    final List<Long> qqs;
-                    try {
-                        qqs = plugin.getDeviceInfoStorage().queryAllQqs();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        return list;
-                    }
-                    for (final Long qq : qqs) {
-                        final String str = qq.toString();
-                        list.add(str);
-                    }
-                    this.allQqs = qqs;
-                } else {
-                    if (this.allQqs != null) {
-                        for (Long qq : this.allQqs) {
-                            final String str = qq.toString();
-                            if (str.startsWith(argQq)) list.add(str);
-                        }
-                    }
-                }
-
-                return list;
+                return tabCompleteAllDeviceQq(commandSender, argQq, "<QQ>");
             }
             return null;
         }
@@ -169,10 +178,10 @@ class DeviceCommand extends TheMcCommand.HasSub {
 
                 final String json;
                 try {
-                    json = plugin.readToString(file);
+                    json = Tool.readToString(file);
                 } catch (IOException e) {
-                    plugin.sendError(commandSender, e.toString());
-                    e.printStackTrace();
+                    plugin.handleException("读取文件%s时异常".formatted(file.getAbsolutePath()), e);
+                    plugin.sendException(commandSender, e);
                     return;
                 }
 
@@ -181,8 +190,8 @@ class DeviceCommand extends TheMcCommand.HasSub {
                 try {
                     added = plugin.getDeviceInfoStorage().insertOrUpdateByQq(qq, json);
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    plugin.sendError(commandSender, e.toString());
+                    plugin.handleException("insertOrUpdateByQq", e);
+                    plugin.sendException(commandSender, e);
                     return;
                 }
 
@@ -207,8 +216,6 @@ class DeviceCommand extends TheMcCommand.HasSub {
     class Remark extends TheMcCommand {
 
         private final @NotNull Permission permission;
-
-        private List<Long> allQqs = null;
 
         protected Remark() {
             super("remark");
@@ -244,8 +251,8 @@ class DeviceCommand extends TheMcCommand.HasSub {
                 try {
                     ok = plugin.getDeviceInfoStorage().setRemark(qq, argRemark);
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    plugin.sendError(commandSender, e.toString());
+                    plugin.handleException("设置设备信息备注时异常", e);
+                    plugin.sendException(commandSender, e);
                     return;
                 }
 
@@ -264,33 +271,7 @@ class DeviceCommand extends TheMcCommand.HasSub {
 
             if (strings.length == 1) {
                 final String argQq = strings[0];
-
-                final LinkedList<String> list = new LinkedList<>();
-
-                if (argQq.isEmpty()) {
-                    list.add("<QQ>");
-                    final List<Long> qqs;
-                    try {
-                        qqs = plugin.getDeviceInfoStorage().queryAllQqs();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        return list;
-                    }
-                    for (final Long qq : qqs) {
-                        final String str = qq.toString();
-                        list.add(str);
-                    }
-                    this.allQqs = qqs;
-                } else {
-                    if (this.allQqs != null) {
-                        for (Long qq : this.allQqs) {
-                            final String str = qq.toString();
-                            if (str.startsWith(argQq)) list.add(str);
-                        }
-                    }
-                }
-
-                return list;
+                return tabCompleteAllDeviceQq(commandSender, argQq, "<QQ>");
             }
 
             if (strings.length == 2) {
@@ -344,8 +325,8 @@ class DeviceCommand extends TheMcCommand.HasSub {
                 try {
                     list = plugin.getDeviceInfoStorage().queryAllWithPage(pageSize, (pageNo - 1) * pageSize);
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    plugin.sendError(commandSender, e.toString());
+                    plugin.handleException("分页查询设备信息时异常", e);
+                    plugin.sendException(commandSender, e);
                     return;
                 }
 
@@ -407,7 +388,6 @@ class DeviceCommand extends TheMcCommand.HasSub {
 
     class Copy extends TheMcCommand {
 
-        private List<Long> allQqs = null;
 
         private final @NotNull Permission permission;
 
@@ -458,8 +438,8 @@ class DeviceCommand extends TheMcCommand.HasSub {
                 try {
                     ok = plugin.getDeviceInfoStorage().copyInfo(srcQq, destQq);
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    plugin.sendError(commandSender, e.toString());
+                    plugin.handleException("复制设备信息时异常", e);
+                    plugin.sendException(commandSender, e);
                     return;
                 }
 
@@ -478,34 +458,7 @@ class DeviceCommand extends TheMcCommand.HasSub {
         public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
             if (strings.length == 1) {
                 final String argQq = strings[0];
-
-                final LinkedList<String> list = new LinkedList<>();
-
-                if (argQq.isEmpty()) {
-                    list.add("<源QQ>");
-                    final List<Long> qqs;
-                    try {
-                        qqs = plugin.getDeviceInfoStorage().queryAllQqs();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        return list;
-                    }
-                    for (final Long qq : qqs) {
-                        final String str = qq.toString();
-                        list.add(str);
-                    }
-                    this.allQqs = qqs;
-                } else {
-                    if (this.allQqs != null) {
-                        for (Long qq : this.allQqs) {
-                            final String str = qq.toString();
-                            if (str.startsWith(argQq)) list.add(str);
-                        }
-                    }
-                }
-
-                return list;
-
+                return tabCompleteAllDeviceQq(commandSender, argQq, "<源QQ>");
             }
 
             if (strings.length == 2) {

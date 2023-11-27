@@ -22,9 +22,12 @@ public class MiraiGo {
     private final @NotNull HashMap<Long, TheLoginSolver2> loginSolvers;
     private final @NotNull PaperCardMirai plugin;
 
+    private final @NotNull Tool tool;
+
     public MiraiGo(@NotNull PaperCardMirai plugin) {
         this.plugin = plugin;
         this.loginSolvers = new HashMap<>();
+        this.tool = new Tool();
     }
 
     void close() {
@@ -146,7 +149,7 @@ public class MiraiGo {
         String ip = null;
 
         try {
-            ip = plugin.getPublicIp();
+            ip = this.tool.getPublicIp();
         } catch (Exception e) {
             e.printStackTrace();
             plugin.sendWarning(sender, "无法获取公网IP: " + e);
@@ -267,12 +270,12 @@ public class MiraiGo {
             final StringBuilder sb = new StringBuilder();
 
             sb.append(e);
-            sb.append('\n');
+            sb.append('\n' );
 
             Throwable t = e;
             while ((t = t.getCause()) != null) {
                 sb.append(t);
-                sb.append('\n');
+                sb.append('\n' );
             }
 
             plugin.sendError(sender, "登录QQ[%d]失败: %s".formatted(accountInfo.qq(), sb.toString()));
@@ -299,7 +302,7 @@ public class MiraiGo {
             // 读取设备信息保存到数据库
             final String json;
             try {
-                json = plugin.readToString(file);
+                json = Tool.readToString(file);
                 if (!json.isEmpty()) {
                     final boolean added;
                     try {

@@ -48,23 +48,28 @@ class TheCommand extends TheMcCommand.HasSub {
         return !commandSender.hasPermission(this.permission);
     }
 
-    void tabCompleteAllQqs(@NotNull List<String> list, @NotNull String arg) {
+    @NotNull List<String> tabCompleteAllQqs(@NotNull CommandSender sender, @NotNull String arg, @NotNull String tip) {
 
-        if (arg.isEmpty()) list.add("<成功登录过的QQ号码>");
+        final LinkedList<String> list = new LinkedList<>();
+
+        if (arg.isEmpty()) list.add(tip);
 
         final List<Long> qqs;
 
         try {
             qqs = plugin.getAccountStorage().queryAllQqs();
         } catch (Exception e) {
-            e.printStackTrace();
-            return;
+            plugin.handleException("", e);
+            plugin.sendException(sender, e);
+            return list;
         }
 
         for (final Long qq : qqs) {
             final String str = "%d".formatted(qq);
             if (str.startsWith(arg)) list.add(str);
         }
+
+        return list;
     }
 
     class SliderVerify extends TheMcCommand {
@@ -195,12 +200,13 @@ class TheCommand extends TheMcCommand.HasSub {
             if (argId == null) {
                 final List<TheLoginSolver2> waitingSmsLoginSolvers = plugin.getMiraiGo().getWaitingSmsLoginSolvers();
 
-                if (waitingSmsLoginSolvers.size() == 0) {
+                final int size = waitingSmsLoginSolvers.size();
+                if (size == 0) {
                     plugin.sendError(commandSender, "没有任何一个登录解决器在等待短信验证码！");
                     return true;
                 }
 
-                if (waitingSmsLoginSolvers.size() != 1) {
+                if (size != 1) {
                     plugin.sendError(commandSender, "当等待短信验证码的机器人数不为1时，你必须指定机器人QQ号码！");
                     return true;
                 }
@@ -301,8 +307,8 @@ class TheCommand extends TheMcCommand.HasSub {
                     try {
                         accountInfo = plugin.getAccountStorage().queryByQq(qq);
                     } catch (Exception e) {
-                        e.printStackTrace();
-                        plugin.sendError(commandSender, e.toString());
+                        plugin.handleException("登录QQ，根据QQ查询账号信息时异常", e);
+                        plugin.sendException(commandSender, e);
                         return;
                     }
 
@@ -339,25 +345,7 @@ class TheCommand extends TheMcCommand.HasSub {
         public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
 
             if (strings.length == 1) {
-                final String arg = strings[0];
-                final LinkedList<String> list = new LinkedList<>();
-                if (arg.isEmpty()) list.add("<QQ号码>");
-
-                final List<Long> qqs;
-
-                try {
-                    qqs = plugin.getAccountStorage().queryAllQqs();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    plugin.sendError(commandSender, e.toString());
-                    return list;
-                }
-
-                for (final Long qq : qqs) {
-                    final String str = "%d".formatted(qq);
-                    if (str.startsWith(arg)) list.add(str);
-                }
-                return list;
+                return tabCompleteAllQqs(commandSender, strings[0], "<QQ号码>");
             }
 
 
@@ -371,7 +359,7 @@ class TheCommand extends TheMcCommand.HasSub {
             if (strings.length == 3) {
                 final LinkedList<String> list = new LinkedList<>();
                 final String argPro = strings[2];
-                if (argPro.isEmpty()) list.add("<协议>");
+                if (argPro.isEmpty()) list.add("[协议]");
 
                 for (BotConfiguration.MiraiProtocol value : BotConfiguration.MiraiProtocol.values()) {
                     final String name = value.name();
@@ -511,8 +499,8 @@ class TheCommand extends TheMcCommand.HasSub {
                 try {
                     ok = plugin.getAccountStorage().setAutoLogin(qq, this.isAdd);
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    plugin.sendError(commandSender, e.toString());
+                    plugin.handleException("切换自动登录时异常", e);
+                    plugin.sendException(commandSender, e);
                     return true;
                 }
 
@@ -529,25 +517,7 @@ class TheCommand extends TheMcCommand.HasSub {
             @Override
             public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
                 if (strings.length == 1) {
-                    final String arg = strings[0];
-                    final LinkedList<String> list = new LinkedList<>();
-                    if (arg.isEmpty()) list.add("<成功登录过的QQ号码>");
-
-                    final List<Long> qqs;
-
-                    try {
-                        qqs = plugin.getAccountStorage().queryAllQqs();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        plugin.sendError(commandSender, e.toString());
-                        return list;
-                    }
-
-                    for (final Long qq : qqs) {
-                        final String str = "%d".formatted(qq);
-                        if (str.startsWith(arg)) list.add(str);
-                    }
-                    return list;
+                    return tabCompleteAllQqs(commandSender, strings[0], "<成功登录过的QQ号码>");
                 }
                 return null;
             }
@@ -593,8 +563,8 @@ class TheCommand extends TheMcCommand.HasSub {
                 try {
                     list = plugin.getAccountStorage().queryOrderByTimeDescWithPage(pageSize, pageSize * (pageNo - 1));
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    plugin.sendError(commandSender, e.toString());
+                    plugin.handleException("查询QQ账号时异常", e);
+                    plugin.sendException(commandSender, e);
                     return;
                 }
 
@@ -745,8 +715,8 @@ class TheCommand extends TheMcCommand.HasSub {
                 try {
                     ok = plugin.getAccountStorage().deleteByQq(qq);
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    plugin.sendError(commandSender, e.toString());
+                    plugin.handleException("删除QQ账号时异常", e);
+                    plugin.sendException(commandSender, e);
                     return;
                 }
 
@@ -764,10 +734,7 @@ class TheCommand extends TheMcCommand.HasSub {
         @Override
         public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
             if (strings.length == 1) {
-                final String arg = strings[0];
-                final LinkedList<String> list = new LinkedList<>();
-                tabCompleteAllQqs(list, arg);
-                return list;
+                return tabCompleteAllQqs(commandSender, strings[0], "<成功登录过的QQ号码>");
             }
             return null;
         }
@@ -845,8 +812,8 @@ class TheCommand extends TheMcCommand.HasSub {
                 try {
                     ok = plugin.getAccountStorage().setRemark(qq, argRemark);
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    plugin.sendError(commandSender, e.toString());
+                    plugin.handleException("设置QQ账号的备注时异常", e);
+                    plugin.sendException(commandSender, e);
                     return;
                 }
 
@@ -865,10 +832,7 @@ class TheCommand extends TheMcCommand.HasSub {
         public @Nullable List<String> onTabComplete(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
 
             if (strings.length == 1) {
-                final String arg = strings[0];
-                final LinkedList<String> list = new LinkedList<>();
-                tabCompleteAllQqs(list, arg);
-                return list;
+                return tabCompleteAllQqs(commandSender, strings[0], "<QQ号码>");
             }
 
             if (strings.length == 2) {
@@ -907,10 +871,11 @@ class TheCommand extends TheMcCommand.HasSub {
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
                 final String ip;
                 try {
-                    ip = plugin.getPublicIp();
+                    // todo
+                    ip = new Tool().getPublicIp();
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    plugin.sendError(commandSender, e.toString());
+                    plugin.handleException("获取公网IP时异常", e);
+                    plugin.sendException(commandSender, e);
                     return;
                 }
 
@@ -925,5 +890,4 @@ class TheCommand extends TheMcCommand.HasSub {
             return null;
         }
     }
-
 }
