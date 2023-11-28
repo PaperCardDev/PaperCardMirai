@@ -1,7 +1,7 @@
 package cn.paper_card.mirai;
 
-import cn.paper_card.database.DatabaseApi;
-import cn.paper_card.database.DatabaseConnection;
+import cn.paper_card.database.api.DatabaseApi;
+import cn.paper_card.database.api.Util;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -20,12 +20,12 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
 
     private final @NotNull DatabaseApi.MySqlConnection mySqlConnection;
 
-    AccountStorageImpl(@NotNull PaperCardMirai plugin) {
-        this.mySqlConnection = plugin.getMySqlConnection();
+    AccountStorageImpl(@NotNull DatabaseApi.MySqlConnection connection) {
+        this.mySqlConnection = connection;
     }
 
     @NotNull Table getTable() throws SQLException {
-        final Connection newCon = this.mySqlConnection.getRowConnection();
+        final Connection newCon = this.mySqlConnection.getRawConnection();
 
         if (this.connection != null && this.connection == newCon) return this.table;
 
@@ -70,7 +70,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
 
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
 
@@ -91,7 +91,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
                 throw new Exception("根据一个QQ[%d]更新了%d条数据！".formatted(qq, updated));
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -112,7 +112,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
                 throw new Exception("根据一个QQ[%d]更新了%d条数据！".formatted(qq, updated));
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -133,7 +133,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
                 throw new Exception("根据一个QQ[%d]更新了%d条数据！".formatted(qq, updated));
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -157,7 +157,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
 
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -175,7 +175,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
                 return list;
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -193,7 +193,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
                 return list;
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -211,7 +211,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
                 return list;
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -249,7 +249,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
         }
 
         private void create(@NotNull Connection connection) throws SQLException {
-            DatabaseConnection.createTable(connection, """
+            Util.executeSQL(connection, """
                     CREATE TABLE IF NOT EXISTS %s (
                         qq BIGINT PRIMARY KEY NOT NULL,
                         nick VARCHAR(64) NOT NULL,
@@ -264,7 +264,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
         }
 
         void close() throws SQLException {
-            DatabaseConnection.closeAllStatements(this.getClass(), this);
+            Util.closeAllStatements(this.getClass(), this);
         }
 
         private @NotNull PreparedStatement getStatementInsert() throws SQLException {

@@ -1,6 +1,6 @@
 package cn.paper_card.mirai;
 
-import cn.paper_card.database.DatabaseApi;
+import cn.paper_card.database.api.DatabaseApi;
 import com.github.Anon8281.universalScheduler.UniversalScheduler;
 import com.github.Anon8281.universalScheduler.scheduling.schedulers.TaskScheduler;
 import net.kyori.adventure.text.Component;
@@ -10,18 +10,18 @@ import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.permissions.Permission;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.NoSuchElementException;
 
 @SuppressWarnings("unused")
 public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiApi {
@@ -30,13 +30,11 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
     private final @NotNull TaskScheduler taskScheduler;
 
 
-    private final @NotNull AccountStorageImpl accountStorage;
+    private AccountStorageImpl accountStorage;
 
-    private final @NotNull DeviceInfoStorageImpl deviceInfoStorage;
+    private DeviceInfoStorageImpl deviceInfoStorage;
 
     private final @NotNull TextComponent prefix;
-
-    private final @NotNull DatabaseApi.MySqlConnection mySqlConnection;
 
 
     private final static String KEY_NO_BOT_LOG = "no-bot-log";
@@ -70,7 +68,6 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
         this.miraiGo = new MiraiGo(this);
 
 
-        this.mySqlConnection = this.getMySqlConnection0();
         this.taskScheduler = UniversalScheduler.getScheduler(this);
 
 
@@ -79,23 +76,6 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
                 .append(Component.text(this.getName()).color(NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD))
                 .append(Component.text("]").color(NamedTextColor.AQUA))
                 .build();
-
-
-        this.accountStorage = new AccountStorageImpl(this);
-        this.deviceInfoStorage = new DeviceInfoStorageImpl(this.mySqlConnection);
-
-    }
-
-    @NotNull DatabaseApi.MySqlConnection getMySqlConnection() {
-        return this.mySqlConnection;
-    }
-
-    private @NotNull DatabaseApi.MySqlConnection getMySqlConnection0() {
-        final Plugin p = this.getServer().getPluginManager().getPlugin("Database");
-        if (p instanceof final DatabaseApi api) {
-            return api.getRemoteMySqlDb().getConnectionImportant();
-        }
-        throw new NoSuchElementException("Database插件未安装！");
     }
 
     boolean isNoBotLog() {
@@ -130,6 +110,15 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
 
     @Override
     public void onEnable() {
+        final DatabaseApi api = this.getServer().getServicesManager().load(DatabaseApi.class);
+        if (api == null) {
+            throw new RuntimeException("无法连接到" + DatabaseApi.class.getSimpleName());
+        }
+
+        DatabaseApi.MySqlConnection mySqlConnection = api.getRemoteMySQL().getConnectionImportant();
+        this.deviceInfoStorage = new DeviceInfoStorageImpl(mySqlConnection);
+        this.accountStorage = new AccountStorageImpl(mySqlConnection);
+
         final PluginCommand command = this.getCommand("paper-card-mirai");
         assert command != null;
         final TheCommand theCommand = new TheCommand(this);
@@ -149,16 +138,21 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
     @Override
     public void onDisable() {
 
-        try {
-            this.accountStorage.closeTable();
-        } catch (SQLException e) {
-            this.handleException("关闭accountStorage时异常", e);
+        if (this.accountStorage != null) {
+            try {
+                this.accountStorage.closeTable();
+            } catch (SQLException e) {
+                this.handleException("关闭accountStorage时异常", e);
+            }
         }
 
-        try {
-            this.deviceInfoStorage.close();
-        } catch (SQLException e) {
-            this.handleException("关闭deviceInfoStorage时异常", e);
+
+        if (this.deviceInfoStorage != null) {
+            try {
+                this.deviceInfoStorage.close();
+            } catch (SQLException e) {
+                this.handleException("关闭deviceInfoStorage时异常", e);
+            }
         }
 
         this.miraiGo.close();

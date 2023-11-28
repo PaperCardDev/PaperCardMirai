@@ -39,14 +39,25 @@
                         </goals>
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
-                            <minimizeJar>false</minimizeJar>
                             <filters>
                                 <filter>
-                                    <artifact>*:*</artifact>
+                                    <artifact>cn.paper_card:*</artifact>
                                     <excludes>
-                                        <exclude>META-INF/*.SF</exclude>
-                                        <exclude>META-INF/*.DSA</exclude>
-                                        <exclude>META-INF/*.RSA</exclude>
+                                        <exclude>META-INF/*.MF</exclude>
+                                    </excludes>
+                                </filter>
+
+                                <filter>
+                                    <artifact>com.github.Anon8281:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.MF</exclude>
+                                    </excludes>
+                                </filter>
+
+                                <filter>
+                                    <artifact>com.github.PaperCardDev:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.MF</exclude>
                                     </excludes>
                                 </filter>
                             </filters>
@@ -89,15 +100,15 @@
         </dependency>
 
         <dependency>
-            <groupId>cn.paper_card</groupId>
-            <artifactId>Database</artifactId>
-            <version>1.1</version>
+            <groupId>com.github.PaperCardDev</groupId>
+            <artifactId>database-api</artifactId>
+            <version>1.0</version>
             <scope>provided</scope>
         </dependency>
 
         <dependency>
-            <groupId>cn.paper_card</groupId>
-            <artifactId>McCommand</artifactId>
+            <groupId>com.github.PaperCardDev</groupId>
+            <artifactId>mc-command</artifactId>
             <version>1.0</version>
         </dependency>
 

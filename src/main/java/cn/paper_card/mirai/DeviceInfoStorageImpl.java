@@ -1,7 +1,8 @@
 package cn.paper_card.mirai;
 
-import cn.paper_card.database.DatabaseApi;
-import cn.paper_card.database.DatabaseConnection;
+
+import cn.paper_card.database.api.DatabaseApi;
+import cn.paper_card.database.api.Util;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -25,7 +26,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
     }
 
     @NotNull Table getTable() throws SQLException {
-        final Connection newCon = this.mySqlConnection.getRowConnection();
+        final Connection newCon = this.mySqlConnection.getRawConnection();
 
         if (this.connection != null && this.connection == newCon) return this.table;
 
@@ -61,7 +62,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
                 return device;
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -88,7 +89,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
                 throw new Exception("根据一个QQ更新了%d条数据！".formatted(update));
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -108,7 +109,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
                 throw new Exception("根据一个QQ[%d]删除了%d条数据！".formatted(qq, deleted));
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -129,7 +130,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
 
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -147,7 +148,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
                 return list;
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -165,7 +166,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
                 return list;
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -186,7 +187,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
                 throw new Exception("插入了%d条数据！".formatted(inserted));
             } catch (SQLException e) {
                 try {
-                    this.mySqlConnection.checkClosedException(e);
+                    this.mySqlConnection.handleException(e);
                 } catch (SQLException ignored) {
                 }
                 throw e;
@@ -221,7 +222,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
         }
 
         private void create() throws SQLException {
-            DatabaseConnection.createTable(this.connection, """
+            Util.executeSQL(this.connection, """
                     CREATE TABLE IF NOT EXISTS %s (
                         qq BIGINT PRIMARY KEY NOT NULL,
                         device VARCHAR(2048) NOT NULL,
@@ -230,7 +231,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
         }
 
         void close() throws SQLException {
-            DatabaseConnection.closeAllStatements(this.getClass(), this);
+            Util.closeAllStatements(this.getClass(), this);
         }
 
         private @NotNull PreparedStatement getStatementInsert() throws SQLException {
