@@ -1,7 +1,10 @@
 package cn.paper_card.mirai;
 
 import cn.paper_card.database.api.DatabaseApi;
+import cn.paper_card.database.api.Parser;
 import cn.paper_card.database.api.Util;
+import cn.paper_card.paper_card_mirai.api.AccountInfo;
+import cn.paper_card.paper_card_mirai.api.QqAccountService;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -9,10 +12,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.LinkedList;
 import java.util.List;
 
-class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
+class QqAccountServiceImpl implements QqAccountService {
 
     private Table table = null;
 
@@ -20,7 +22,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
 
     private final @NotNull DatabaseApi.MySqlConnection mySqlConnection;
 
-    AccountStorageImpl(@NotNull DatabaseApi.MySqlConnection connection) {
+    QqAccountServiceImpl(@NotNull DatabaseApi.MySqlConnection connection) {
         this.mySqlConnection = connection;
     }
 
@@ -51,7 +53,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
     }
 
     @Override
-    public boolean addOrUpdateByQq(@NotNull PaperCardMiraiApi.AccountInfo info) throws Exception {
+    public boolean addOrUpdateByQq(@NotNull AccountInfo info) throws Exception {
         synchronized (this.mySqlConnection) {
             try {
                 final Table t = this.getTable();
@@ -121,7 +123,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
     }
 
     @Override
-    public boolean setRemark(long qq, String remark) throws Exception {
+    public boolean setRemark(long qq, String remark) throws SQLException {
         synchronized (this.mySqlConnection) {
             try {
                 final Table t = this.getTable();
@@ -130,7 +132,8 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
 
                 if (updated == 1) return true;
                 if (updated == 0) return false;
-                throw new Exception("根据一个QQ[%d]更新了%d条数据！".formatted(qq, updated));
+
+                throw new RuntimeException("根据一个QQ[%d]更新了%d条数据！".formatted(qq, updated));
             } catch (SQLException e) {
                 try {
                     this.mySqlConnection.handleException(e);
@@ -142,19 +145,13 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
     }
 
     @Override
-    public @Nullable PaperCardMiraiApi.AccountInfo queryByQq(long qq) throws Exception {
+    public @Nullable AccountInfo queryByQq(long qq) throws SQLException {
         synchronized (this.mySqlConnection) {
             try {
                 final Table t = this.getTable();
-                final List<PaperCardMiraiApi.AccountInfo> list = t.queryByQq(qq);
+                final AccountInfo info = t.queryByQq(qq);
                 this.mySqlConnection.setLastUseTime();
-
-                final int size = list.size();
-                if (size == 1) return list.get(0);
-                if (size == 0) return null;
-
-                throw new Exception("根据一个QQ[%d]查询到了%d条数据！".formatted(qq, size));
-
+                return info;
             } catch (SQLException e) {
                 try {
                     this.mySqlConnection.handleException(e);
@@ -184,11 +181,11 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
     }
 
     @Override
-    public @NotNull List<PaperCardMiraiApi.AccountInfo> queryAutoLoginAccounts() throws Exception {
+    public @NotNull List<AccountInfo> queryAutoLoginAccounts() throws Exception {
         synchronized (this.mySqlConnection) {
             try {
                 final Table t = this.getTable();
-                final List<PaperCardMiraiApi.AccountInfo> list = t.queryAutoLogins();
+                final List<AccountInfo> list = t.queryAutoLogins();
                 this.mySqlConnection.setLastUseTime();
                 return list;
             } catch (SQLException e) {
@@ -202,11 +199,11 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
     }
 
     @Override
-    public @NotNull List<PaperCardMiraiApi.AccountInfo> queryOrderByTimeDescWithPage(int limit, int offset) throws Exception {
+    public @NotNull List<AccountInfo> queryOrderByTimeDescWithPage(int limit, int offset) throws Exception {
         synchronized (this.mySqlConnection) {
             try {
                 final Table t = this.getTable();
-                final List<PaperCardMiraiApi.AccountInfo> list = t.queryAllOrderByTimeDescWithPage(limit, offset);
+                final List<AccountInfo> list = t.queryAllOrderByTimeDescWithPage(limit, offset);
                 this.mySqlConnection.setLastUseTime();
                 return list;
             } catch (SQLException e) {
@@ -244,12 +241,12 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
         private final static String ALL_COLS = "qq,nick,level,pwd_md5,protocol,time,ip,auto_login,remark";
 
         Table(@NotNull Connection connection) throws SQLException {
-            this.create(connection);
             this.connection = connection;
+            this.create();
         }
 
-        private void create(@NotNull Connection connection) throws SQLException {
-            Util.executeSQL(connection, """
+        private void create() throws SQLException {
+            Util.executeSQL(this.connection, """
                     CREATE TABLE IF NOT EXISTS %s (
                         qq BIGINT PRIMARY KEY NOT NULL,
                         nick VARCHAR(64) NOT NULL,
@@ -278,7 +275,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
         private @NotNull PreparedStatement getStatementUpdateByQq() throws SQLException {
             if (this.statementUpdateByQq == null) {
                 this.statementUpdateByQq = this.connection.prepareStatement
-                        ("UPDATE %s SET nick=?,level=?,pwd_md5=?,protocol=?,time=?,ip=?,auto_login=?,remark=? WHERE qq=?".formatted(NAME));
+                        ("UPDATE %s SET nick=?,level=?,pwd_md5=?,protocol=?,time=?,ip=?,auto_login=?,remark=? WHERE qq=? LIMIT 1".formatted(NAME));
             }
             return this.statementUpdateByQq;
         }
@@ -286,7 +283,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
         private @NotNull PreparedStatement getStatementDeleteByQq() throws SQLException {
             if (this.statementDeleteByQq == null) {
                 this.statementDeleteByQq = this.connection.prepareStatement
-                        ("DELETE FROM %s WHERE qq=?".formatted(NAME));
+                        ("DELETE FROM %s WHERE qq=? LIMIT 1".formatted(NAME));
             }
             return this.statementDeleteByQq;
         }
@@ -294,7 +291,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
         private @NotNull PreparedStatement getStatementSetAutoLogin() throws SQLException {
             if (this.statementSetAutoLogin == null) {
                 this.statementSetAutoLogin = this.connection.prepareStatement
-                        ("UPDATE %s SET auto_login=? WHERE qq=?".formatted(NAME));
+                        ("UPDATE %s SET auto_login=? WHERE qq=? LIMIT 1".formatted(NAME));
             }
             return this.statementSetAutoLogin;
         }
@@ -302,7 +299,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
         private @NotNull PreparedStatement getStatementSetRemark() throws SQLException {
             if (this.statementSetRemark == null) {
                 this.statementSetRemark = this.connection.prepareStatement
-                        ("UPDATE %s SET remark=? WHERE qq=?".formatted(NAME));
+                        ("UPDATE %s SET remark=? WHERE qq=? LIMIT 1".formatted(NAME));
             }
             return this.statementSetRemark;
         }
@@ -310,7 +307,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
         private @NotNull PreparedStatement getStatementQueryByQq() throws SQLException {
             if (this.statementQueryByQq == null) {
                 this.statementQueryByQq = this.connection.prepareStatement
-                        ("SELECT %s FROM %s WHERE qq=?".formatted(ALL_COLS, NAME));
+                        ("SELECT %s FROM %s WHERE qq=? LIMIT 1".formatted(ALL_COLS, NAME));
             }
             return this.statementQueryByQq;
         }
@@ -340,7 +337,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
             return this.statementQueryAllOrderByTimeDescWithPage;
         }
 
-        int insert(@NotNull PaperCardMiraiApi.AccountInfo info) throws SQLException {
+        int insert(@NotNull AccountInfo info) throws SQLException {
             final PreparedStatement ps = this.getStatementInsert();
 
             ps.setLong(1, info.qq());
@@ -356,7 +353,7 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
             return ps.executeUpdate();
         }
 
-        int updateByQq(@NotNull PaperCardMiraiApi.AccountInfo info) throws SQLException {
+        int updateByQq(@NotNull AccountInfo info) throws SQLException {
             final PreparedStatement ps = this.getStatementUpdateByQq();
 //            ("UPDATE %s SET nick=?,level=?,pwd_md5=?,protocol=?,time=?,auto_login=? WHERE qq=?".formatted(NAME));
             ps.setString(1, info.nick());
@@ -393,47 +390,11 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
             return ps.executeUpdate();
         }
 
-        @NotNull List<PaperCardMiraiApi.AccountInfo> parseAll(@NotNull ResultSet resultSet) throws SQLException {
-
-            final List<PaperCardMiraiApi.AccountInfo> list = new LinkedList<>();
-
-            try {
-                while (resultSet.next()) {
-                    final long qq = resultSet.getLong(1);
-                    final String nick = resultSet.getString(2);
-                    final int level = resultSet.getInt(3);
-                    final String passwordMd5 = resultSet.getString(4);
-                    final String protocol = resultSet.getString(5);
-                    final long time = resultSet.getLong(6);
-                    final String ip = resultSet.getString(7);
-                    final int autoLogin = resultSet.getInt(8);
-                    final String remark = resultSet.getString(9);
-
-                    final PaperCardMiraiApi.AccountInfo info = new PaperCardMiraiApi.AccountInfo(
-                            qq, nick, level, passwordMd5, protocol, time, ip, autoLogin != 0, remark
-                    );
-
-                    list.add(info);
-
-                }
-            } catch (SQLException e) {
-                try {
-                    resultSet.close();
-                } catch (SQLException ignored) {
-
-                }
-                throw e;
-            }
-            resultSet.close();
-
-            return list;
-        }
-
-        @NotNull List<PaperCardMiraiApi.AccountInfo> queryByQq(long qq) throws SQLException {
+        @Nullable AccountInfo queryByQq(long qq) throws SQLException {
             final PreparedStatement ps = this.getStatementQueryByQq();
             ps.setLong(1, qq);
             final ResultSet resultSet = ps.executeQuery();
-            return this.parseAll(resultSet);
+            return new ParserAccountInfo().parseOne(resultSet);
         }
 
         @NotNull List<Long> queryAllQqs() throws SQLException {
@@ -441,39 +402,28 @@ class AccountStorageImpl implements PaperCardMiraiApi.AccountStorage {
 
             final ResultSet resultSet = ps.executeQuery();
 
-            final List<Long> list = new LinkedList<>();
-
-            try {
-                while (resultSet.next()) {
-                    final long qq = resultSet.getLong(1);
-                    list.add(qq);
+            return new Parser<Long>() {
+                @Override
+                public @NotNull Long parseRow(@NotNull ResultSet resultSet) throws SQLException {
+                    return resultSet.getLong(1);
                 }
-            } catch (SQLException e) {
-                try {
-                    resultSet.close();
-                } catch (SQLException ignored) {
-                }
-                throw e;
-            }
+            }.parseAll(resultSet);
 
-            resultSet.close();
-
-            return list;
         }
 
-        @NotNull List<PaperCardMiraiApi.AccountInfo> queryAutoLogins() throws SQLException {
+        @NotNull List<AccountInfo> queryAutoLogins() throws SQLException {
             final PreparedStatement ps = this.getStatementQueryAutoLogins();
             ps.setInt(1, 1);
             final ResultSet resultSet = ps.executeQuery();
-            return this.parseAll(resultSet);
+            return new ParserAccountInfo().parseAll(resultSet);
         }
 
-        @NotNull List<PaperCardMiraiApi.AccountInfo> queryAllOrderByTimeDescWithPage(int limit, int offset) throws SQLException {
+        @NotNull List<AccountInfo> queryAllOrderByTimeDescWithPage(int limit, int offset) throws SQLException {
             final PreparedStatement ps = this.getStatementQueryAllOrderByTimeDescWithPage();
             ps.setInt(1, limit);
             ps.setInt(2, offset);
             final ResultSet resultSet = ps.executeQuery();
-            return this.parseAll(resultSet);
+            return new ParserAccountInfo().parseAll(resultSet);
         }
     }
 }

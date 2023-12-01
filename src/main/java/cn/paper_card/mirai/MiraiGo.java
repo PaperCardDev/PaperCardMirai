@@ -1,5 +1,7 @@
 package cn.paper_card.mirai;
 
+import cn.paper_card.paper_card_mirai.api.AccountInfo;
+import cn.paper_card.paper_card_mirai.api.DeviceInfo;
 import net.mamoe.mirai.Bot;
 import net.mamoe.mirai.BotFactory;
 import net.mamoe.mirai.contact.Friend;
@@ -20,11 +22,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class MiraiGo {
     private final @NotNull HashMap<Long, TheLoginSolver2> loginSolvers;
-    private final @NotNull PaperCardMirai plugin;
+    private final @NotNull ThePlugin plugin;
 
     private final @NotNull Tool tool;
 
-    public MiraiGo(@NotNull PaperCardMirai plugin) {
+    public MiraiGo(@NotNull ThePlugin plugin) {
         this.plugin = plugin;
         this.loginSolvers = new HashMap<>();
         this.tool = new Tool();
@@ -58,7 +60,7 @@ public class MiraiGo {
             try {
                 lock.wait(5 * 1000);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                plugin.handleException("wait", e);
             }
         }
     }
@@ -110,7 +112,7 @@ public class MiraiGo {
         return new File(folder, protocol.name().toLowerCase() + ".json");
     }
 
-    public void doLogin(@NotNull PaperCardMiraiApi.AccountInfo accountInfo, @NotNull CommandSender sender) {
+    public void doLogin(@NotNull AccountInfo accountInfo, @NotNull CommandSender sender) {
         // 获取最新版本协议
 
 
@@ -119,8 +121,8 @@ public class MiraiGo {
         try {
             protocol = BotConfiguration.MiraiProtocol.valueOf(accountInfo.protocol());
         } catch (IllegalArgumentException e) {
-            e.printStackTrace();
-            plugin.sendError(sender, e.toString());
+            plugin.handleException("illegal protocol", e);
+            plugin.sendException(sender, e);
             return;
         }
 
@@ -151,7 +153,6 @@ public class MiraiGo {
         try {
             ip = this.tool.getPublicIp();
         } catch (Exception e) {
-            e.printStackTrace();
             plugin.sendWarning(sender, "无法获取公网IP: " + e);
         }
 
@@ -177,17 +178,14 @@ public class MiraiGo {
         final TheLoginSolver2 solver;
         synchronized (this.loginSolvers) {
             final TheLoginSolver2 s = this.loginSolvers.get(accountInfo.qq());
-            if (s != null) {
-                s.notifyClose();
-            }
+            if (s != null) s.notifyClose();
             solver = new TheLoginSolver2(sender, accountInfo.qq());
             this.loginSolvers.put(accountInfo.qq(), solver);
         }
 
+        final ThePlugin plugin = this.plugin;
 
-        final PaperCardMirai plugin = this.plugin;
-
-        final AtomicReference<String> device = new AtomicReference<>(null);
+        final AtomicReference<DeviceInfo> deviceFromDb = new AtomicReference<>(null);
 
         final BotFactory.BotConfigurationLambda botConfigurationLambda = botConfiguration -> {
 
@@ -203,24 +201,27 @@ public class MiraiGo {
             if (plugin.isNetworkLog()) botConfiguration.noNetworkLog();
 
             // 设备信息
-            final String info;
+            final DeviceInfo info;
 
             try {
-                info = plugin.getDeviceInfoStorage().queryByQq(accountInfo.qq());
+                info = plugin.getPaperCardMiraiApi().getDeviceInfoService().queryByQq(accountInfo.qq());
             } catch (Exception e) {
-                e.printStackTrace();
+                plugin.handleException("query device info by qq", e);
+                plugin.sendException(sender, e);
                 botConfiguration.fileBasedDeviceInfo();
                 return;
             }
 
-            if (info != null && !info.isEmpty()) {
-                plugin.sendInfo(sender, "使用数据库中的保存的设备信息");
-                botConfiguration.loadDeviceInfoJson(info);
-                device.set(info);
+            if (info != null) {
+                final String json = info.json();
+                if (json != null && !json.isEmpty()) {
+                    plugin.sendInfo(sender, "使用数据库中的保存的设备信息");
+                    botConfiguration.loadDeviceInfoJson(json);
+                    deviceFromDb.set(info);
+                }
             } else {
                 botConfiguration.fileBasedDeviceInfo();
             }
-
         };
 
         // 将MD5转为字节数组
@@ -240,7 +241,7 @@ public class MiraiGo {
             final UserProfile userProfile = asFriend.queryProfile();
             final int qLevel = userProfile.getQLevel();
 
-            final PaperCardMiraiApi.AccountInfo info = new PaperCardMiraiApi.AccountInfo(
+            final AccountInfo info = new AccountInfo(
                     accountInfo.qq(),
                     nick,
                     qLevel,
@@ -256,29 +257,20 @@ public class MiraiGo {
 
             // 保存到数据库
             try {
-                final boolean added = plugin.getAccountStorage().addOrUpdateByQq(info);
+                final boolean added = plugin.getPaperCardMiraiApi().getQqAccountService().addOrUpdateByQq(info);
 
                 plugin.sendInfo(sender, "%s了QQ机器人[%d]账号信息".formatted(added ? "添加" : "更新", accountInfo.qq()));
 
             } catch (Exception e) {
-                e.printStackTrace();
-                plugin.sendError(sender, e.toString());
+                plugin.handleException("qq account service -> add or update by qq", e);
+                plugin.sendException(sender, e);
             }
 
-        } catch (RuntimeException e) {
-            e.printStackTrace();
-            final StringBuilder sb = new StringBuilder();
+        } catch (Exception e) {
+            plugin.handleException("login failed", e);
 
-            sb.append(e);
-            sb.append('\n' );
-
-            Throwable t = e;
-            while ((t = t.getCause()) != null) {
-                sb.append(t);
-                sb.append('\n' );
-            }
-
-            plugin.sendError(sender, "登录QQ[%d]失败: %s".formatted(accountInfo.qq(), sb.toString()));
+            plugin.sendError(sender, "登录失败！");
+            plugin.sendException(sender, e);
         }
 
 
@@ -287,15 +279,16 @@ public class MiraiGo {
         }
 
 
-        final String devInfo = device.get();
+        final DeviceInfo devInfo = deviceFromDb.get();
         final File file = new File(plugin.getBotWorkingDir(accountInfo.qq()), "device.json");
+
         if (devInfo != null) {
             // 保存到文件中
             try {
-                plugin.writeString(file, devInfo);
+                plugin.writeString(file, devInfo.json());
                 plugin.sendInfo(sender, "已将设备信息保存到device.json中");
             } catch (IOException e) {
-                e.printStackTrace();
+                plugin.handleException("write string to file", e);
                 plugin.sendWarning(sender, e.toString());
             }
         } else {
@@ -306,16 +299,19 @@ public class MiraiGo {
                 if (!json.isEmpty()) {
                     final boolean added;
                     try {
-                        added = plugin.getDeviceInfoStorage().insertOrUpdateByQq(accountInfo.qq(), json);
+                        added = plugin.getPaperCardMiraiApi().getDeviceInfoService().insertOrUpdateByQq(new DeviceInfo(
+                                accountInfo.qq(), json, "备注"
+                        ));
+
                         plugin.sendInfo(sender, "%s成功，已将设备信息保存到数据库".formatted(added ? "添加" : "更新"));
 
                     } catch (Exception e) {
-                        e.printStackTrace();
-                        plugin.sendWarning(sender, e.toString());
+                        plugin.handleException("device info service -> add or update", e);
+                        plugin.sendException(sender, e);
                     }
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                plugin.handleException("read file content", e);
                 plugin.sendWarning(sender, e.toString());
             }
         }

@@ -1,6 +1,7 @@
 package cn.paper_card.mirai;
 
 import cn.paper_card.mc_command.TheMcCommand;
+import cn.paper_card.paper_card_mirai.api.DeviceInfo;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -22,11 +23,11 @@ class DeviceCommand extends TheMcCommand.HasSub {
 
     private final @NotNull Permission permission;
 
-    private final @NotNull PaperCardMirai plugin;
+    private final @NotNull ThePlugin plugin;
 
     private List<Long> allQqCache = null;
 
-    public DeviceCommand(@NotNull PaperCardMirai plugin) {
+    public DeviceCommand(@NotNull ThePlugin plugin) {
         super("device");
         this.plugin = plugin;
         this.permission = plugin.addPermission("paper-card-mirai.command.device");
@@ -51,7 +52,7 @@ class DeviceCommand extends TheMcCommand.HasSub {
             final List<Long> qqs;
 
             try {
-                qqs = this.plugin.getDeviceInfoStorage().queryAllQqs();
+                qqs = this.plugin.getPaperCardMiraiApi().getDeviceInfoService().queryAllQqs();
             } catch (Exception e) {
                 this.plugin.handleException("Tab补全，查询所有设备信息的QQ时异常", e);
                 this.plugin.sendException(sender, e);
@@ -113,7 +114,7 @@ class DeviceCommand extends TheMcCommand.HasSub {
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
                 final boolean ok;
                 try {
-                    ok = plugin.getDeviceInfoStorage().deleteByQq(qq);
+                    ok = plugin.getPaperCardMiraiApi().getQqAccountService().deleteByQq(qq);
                 } catch (Exception e) {
                     plugin.handleException("尝试删除QQ[%d]的设备信息时异常".formatted(qq), e);
                     plugin.sendException(commandSender, e);
@@ -188,7 +189,11 @@ class DeviceCommand extends TheMcCommand.HasSub {
                 final boolean added;
 
                 try {
-                    added = plugin.getDeviceInfoStorage().insertOrUpdateByQq(qq, json);
+                    added = plugin.getPaperCardMiraiApi().getDeviceInfoService().insertOrUpdateByQq(new DeviceInfo(
+                            qq,
+                            json,
+                            "load指令加载"
+                    ));
                 } catch (Exception e) {
                     plugin.handleException("insertOrUpdateByQq", e);
                     plugin.sendException(commandSender, e);
@@ -249,7 +254,7 @@ class DeviceCommand extends TheMcCommand.HasSub {
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
                 boolean ok;
                 try {
-                    ok = plugin.getDeviceInfoStorage().setRemark(qq, argRemark);
+                    ok = plugin.getPaperCardMiraiApi().getDeviceInfoService().setRemark(qq, argRemark);
                 } catch (Exception e) {
                     plugin.handleException("设置设备信息备注时异常", e);
                     plugin.sendException(commandSender, e);
@@ -320,10 +325,10 @@ class DeviceCommand extends TheMcCommand.HasSub {
 
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
                 final int pageSize = 1;
-                final List<PaperCardMiraiApi.DeviceInfo> list;
+                final List<DeviceInfo> list;
 
                 try {
-                    list = plugin.getDeviceInfoStorage().queryAllWithPage(pageSize, (pageNo - 1) * pageSize);
+                    list = plugin.getPaperCardMiraiApi().getDeviceInfoService().queryAllWithPage(pageSize, (pageNo - 1) * pageSize);
                 } catch (Exception e) {
                     plugin.handleException("分页查询设备信息时异常", e);
                     plugin.sendException(commandSender, e);
@@ -333,17 +338,26 @@ class DeviceCommand extends TheMcCommand.HasSub {
                 final int size = list.size();
 
                 final TextComponent.Builder text = Component.text();
-                text.append(Component.text("---- 设备信息 | 第%d页 ----".formatted(pageNo)));
-                text.appendNewline();
+                text.append(Component.text("==== 设备信息 | 第%d页 ====".formatted(pageNo)));
+
 
                 if (size == 0) {
-                    text.append(Component.text("本页没有任何记录啦").color(NamedTextColor.GRAY));
                     text.appendNewline();
+                    text.append(Component.text("本页没有任何记录啦").color(NamedTextColor.GRAY));
+
                 } else {
-                    for (PaperCardMiraiApi.DeviceInfo info : list) {
+                    for (DeviceInfo info : list) {
+                        text.appendNewline();
 
                         text.append(Component.text("JSON: "));
-                        text.append(Component.text(info.json()));
+
+                        String json = info.json();
+                        if (json.length() > 64) {
+                            json = json.substring(0, 61);
+                            json = json + "...";
+                        }
+
+                        text.append(Component.text(json));
                         text.appendNewline();
 
                         text.append(Component.text("QQ: "));
@@ -353,13 +367,14 @@ class DeviceCommand extends TheMcCommand.HasSub {
                         text.append(Component.text("备注: "));
                         final String remark = info.remark();
                         text.append(Component.text(remark == null ? "NULL" : remark));
-                        text.appendNewline();
+
                     }
                 }
 
                 final boolean noNext = size < pageSize;
                 final boolean hasPre = pageNo > 1;
 
+                text.appendNewline();
                 text.append(Component.text("[上一页]")
                         .color(NamedTextColor.GRAY).decorate(TextDecoration.UNDERLINED)
                         .hoverEvent(HoverEvent.showText(Component.text(hasPre ? "点击上一页" : "没有上一页啦")))
@@ -436,7 +451,7 @@ class DeviceCommand extends TheMcCommand.HasSub {
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
                 boolean ok;
                 try {
-                    ok = plugin.getDeviceInfoStorage().copyInfo(srcQq, destQq);
+                    ok = plugin.getPaperCardMiraiApi().getDeviceInfoService().copyInfo(srcQq, destQq);
                 } catch (Exception e) {
                     plugin.handleException("复制设备信息时异常", e);
                     plugin.sendException(commandSender, e);

@@ -2,7 +2,10 @@ package cn.paper_card.mirai;
 
 
 import cn.paper_card.database.api.DatabaseApi;
+import cn.paper_card.database.api.Parser;
 import cn.paper_card.database.api.Util;
+import cn.paper_card.paper_card_mirai.api.DeviceInfo;
+import cn.paper_card.paper_card_mirai.api.DeviceInfoService;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -10,10 +13,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.LinkedList;
 import java.util.List;
 
-class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
+class DeviceInfoServiceImpl implements DeviceInfoService {
 
     private final @NotNull DatabaseApi.MySqlConnection mySqlConnection;
 
@@ -21,7 +23,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
 
     private Table table = null;
 
-    DeviceInfoStorageImpl(@NotNull DatabaseApi.MySqlConnection connection) {
+    DeviceInfoServiceImpl(@NotNull DatabaseApi.MySqlConnection connection) {
         this.mySqlConnection = connection;
     }
 
@@ -53,13 +55,13 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
     }
 
     @Override
-    public @Nullable String queryByQq(long qq) throws Exception {
+    public @Nullable DeviceInfo queryByQq(long qq) throws SQLException {
         synchronized (this.mySqlConnection) {
             try {
                 final Table t = this.getTable();
-                final String device = t.queryDevice(qq);
+                final DeviceInfo info = t.queryByQq(qq);
                 this.mySqlConnection.setLastUseTime();
-                return device;
+                return info;
             } catch (SQLException e) {
                 try {
                     this.mySqlConnection.handleException(e);
@@ -71,22 +73,22 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
     }
 
     @Override
-    public boolean insertOrUpdateByQq(long qq, @NotNull String json) throws Exception {
+    public boolean insertOrUpdateByQq(@NotNull DeviceInfo info) throws SQLException {
         synchronized (this.mySqlConnection) {
             try {
                 final Table t = this.getTable();
-                final int update = t.update(qq, json);
+                final int update = t.update(info);
                 this.mySqlConnection.setLastUseTime();
 
                 if (update == 1) return false;
                 if (update == 0) {
-                    final int inserted = t.insert(qq, json);
+                    final int inserted = t.insert(info);
                     this.mySqlConnection.setLastUseTime();
-                    if (inserted != 1) throw new Exception("插入了%d条数据！".formatted(inserted));
+                    if (inserted != 1) throw new RuntimeException("插入了%d条数据！".formatted(inserted));
                     return true;
                 }
 
-                throw new Exception("根据一个QQ更新了%d条数据！".formatted(update));
+                throw new RuntimeException("根据一个QQ更新了%d条数据！".formatted(update));
             } catch (SQLException e) {
                 try {
                     this.mySqlConnection.handleException(e);
@@ -97,8 +99,9 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
         }
     }
 
+
     @Override
-    public boolean deleteByQq(long qq) throws Exception {
+    public boolean deleteByQq(long qq) throws SQLException {
         synchronized (this.mySqlConnection) {
             try {
                 final Table t = this.getTable();
@@ -106,7 +109,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
                 this.mySqlConnection.setLastUseTime();
                 if (deleted == 1) return true;
                 if (deleted == 0) return false;
-                throw new Exception("根据一个QQ[%d]删除了%d条数据！".formatted(qq, deleted));
+                throw new RuntimeException("根据一个QQ[%d]删除了%d条数据！".formatted(qq, deleted));
             } catch (SQLException e) {
                 try {
                     this.mySqlConnection.handleException(e);
@@ -118,7 +121,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
     }
 
     @Override
-    public boolean setRemark(long qq, @Nullable String remark) throws Exception {
+    public boolean setRemark(long qq, @Nullable String remark) throws SQLException {
         synchronized (this.mySqlConnection) {
             try {
                 final Table t = this.getTable();
@@ -126,8 +129,8 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
                 this.mySqlConnection.setLastUseTime();
                 if (updated == 1) return true;
                 if (updated == 0) return false;
-                throw new Exception("根据一个QQ[%d]更新了%d条数据！".formatted(qq, updated));
 
+                throw new RuntimeException("根据一个QQ[%d]更新了%d条数据！".formatted(qq, updated));
             } catch (SQLException e) {
                 try {
                     this.mySqlConnection.handleException(e);
@@ -157,11 +160,11 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
     }
 
     @Override
-    public @NotNull List<PaperCardMiraiApi.DeviceInfo> queryAllWithPage(int limit, int offset) throws SQLException {
+    public @NotNull List<DeviceInfo> queryAllWithPage(int limit, int offset) throws SQLException {
         synchronized (this.mySqlConnection) {
             try {
                 final Table t = this.getTable();
-                final List<PaperCardMiraiApi.DeviceInfo> list = t.queryWithPage(limit, offset);
+                final List<DeviceInfo> list = t.queryWithPage(limit, offset);
                 this.mySqlConnection.setLastUseTime();
                 return list;
             } catch (SQLException e) {
@@ -175,16 +178,15 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
     }
 
     @Override
-    public boolean copyInfo(long src, long dest) throws Exception {
+    public boolean copyInfo(long src, long dest) throws SQLException {
         synchronized (this.mySqlConnection) {
-
             try {
                 final Table t = this.getTable();
                 final int inserted = t.copyInfo(src, dest);
                 this.mySqlConnection.setLastUseTime();
                 if (inserted == 1) return true;
                 if (inserted == 0) return false;
-                throw new Exception("插入了%d条数据！".formatted(inserted));
+                throw new RuntimeException("插入了%d条数据！".formatted(inserted));
             } catch (SQLException e) {
                 try {
                     this.mySqlConnection.handleException(e);
@@ -195,7 +197,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
         }
     }
 
-    static class Table {
+    static class Table extends Parser<DeviceInfo> {
 
         private final static String NAME = "device";
 
@@ -237,7 +239,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
         private @NotNull PreparedStatement getStatementInsert() throws SQLException {
             if (this.statementInsert == null) {
                 this.statementInsert = this.connection.prepareStatement
-                        ("INSERT INTO %s (qq, device) VALUES (?, ?)".formatted(NAME));
+                        ("INSERT INTO %s (qq, device, remark) VALUES (?, ?, ?)".formatted(NAME));
             }
             return this.statementInsert;
         }
@@ -245,7 +247,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
         private @NotNull PreparedStatement getStatementUpdate() throws SQLException {
             if (this.statementUpdate == null) {
                 this.statementUpdate = connection.prepareStatement
-                        ("UPDATE %s SET device=? WHERE qq=?".formatted(NAME));
+                        ("UPDATE %s SET device=?, remark=? WHERE qq=? LIMIT 1".formatted(NAME));
             }
             return this.statementUpdate;
         }
@@ -253,7 +255,7 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
         private @NotNull PreparedStatement getStatementQueryDevice() throws SQLException {
             if (this.statementQueryDevice == null) {
                 this.statementQueryDevice = this.connection.prepareStatement
-                        ("SELECT device FROM %s WHERE qq=?".formatted(NAME));
+                        ("SELECT device FROM %s WHERE qq=? LIMIT 1".formatted(NAME));
             }
             return this.statementQueryDevice;
         }
@@ -299,17 +301,19 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
             return this.statementCopyInfo;
         }
 
-        int insert(long qq, @NotNull String device) throws SQLException {
+        int insert(@NotNull DeviceInfo info) throws SQLException {
             final PreparedStatement ps = this.getStatementInsert();
-            ps.setLong(1, qq);
-            ps.setString(2, device);
+            ps.setLong(1, info.qq());
+            ps.setString(2, info.json());
+            ps.setString(3, info.remark());
             return ps.executeUpdate();
         }
 
-        int update(long qq, @NotNull String device) throws SQLException {
+        int update(@NotNull DeviceInfo info) throws SQLException {
             final PreparedStatement ps = this.getStatementUpdate();
-            ps.setString(1, device);
-            ps.setLong(2, qq);
+            ps.setString(1, info.json());
+            ps.setString(2, info.remark());
+            ps.setLong(3, info.qq());
             return ps.executeUpdate();
         }
 
@@ -326,85 +330,38 @@ class DeviceInfoStorageImpl implements PaperCardMiraiApi.DeviceInfoStorage {
             return ps.executeUpdate();
         }
 
-        @Nullable String queryDevice(long qq) throws SQLException {
+        @Nullable DeviceInfo queryByQq(long qq) throws SQLException {
             final PreparedStatement ps = this.getStatementQueryDevice();
 
             ps.setLong(1, qq);
 
             final ResultSet resultSet = ps.executeQuery();
 
-            final String device;
-
-            try {
-                if (resultSet.next()) {
-                    device = resultSet.getString(1);
-                } else device = null;
-
-                if (resultSet.next()) throw new SQLException("不应该还有更多数据！");
-
-            } catch (SQLException e) {
-                try {
-                    resultSet.close();
-                } catch (SQLException ignored) {
-                }
-                throw e;
-            }
-
-            resultSet.close();
-
-            return device;
+            return this.parseOne(resultSet);
         }
 
         @NotNull List<Long> queryAllQqs() throws SQLException {
             final PreparedStatement ps = this.getStatementQueryAllQqs();
             final ResultSet resultSet = ps.executeQuery();
 
-            final List<Long> list = new LinkedList<>();
 
-            try {
-                while (resultSet.next()) {
-                    final long qq = resultSet.getLong(1);
-                    list.add(qq);
+            return new Parser<Long>() {
+                @Override
+                public @NotNull Long parseRow(@NotNull ResultSet resultSet) throws SQLException {
+                    return resultSet.getLong(1);
                 }
-            } catch (SQLException e) {
-                try {
-                    resultSet.close();
-                } catch (SQLException ignored) {
-                }
-
-                throw e;
-            }
-
-            resultSet.close();
-
-            return list;
+            }.parseAll(resultSet);
         }
 
-        private @NotNull List<PaperCardMiraiApi.DeviceInfo> parseAll(@NotNull ResultSet resultSet) throws SQLException {
-
-            final List<PaperCardMiraiApi.DeviceInfo> list = new LinkedList<>();
-
-            try {
-                while (resultSet.next()) {
-                    final long qq = resultSet.getLong(1);
-                    final String device = resultSet.getString(2);
-                    final String remark = resultSet.getString(3);
-                    final PaperCardMiraiApi.DeviceInfo info = new PaperCardMiraiApi.DeviceInfo(qq, device, remark);
-                    list.add(info);
-                }
-            } catch (SQLException e) {
-                try {
-                    resultSet.close();
-                } catch (SQLException ignored) {
-                }
-                throw e;
-            }
-
-            resultSet.close();
-            return list;
+        @Override
+        public @NotNull DeviceInfo parseRow(@NotNull ResultSet resultSet) throws SQLException {
+            final long qq = resultSet.getLong(1);
+            final String json = resultSet.getString(2);
+            final String remark = resultSet.getString(3);
+            return new DeviceInfo(qq, json, remark);
         }
 
-        @NotNull List<PaperCardMiraiApi.DeviceInfo> queryWithPage(int limit, int offset) throws SQLException {
+        @NotNull List<DeviceInfo> queryWithPage(int limit, int offset) throws SQLException {
             final PreparedStatement ps = this.getStatementQueryAllWithPage();
             ps.setInt(1, limit);
             ps.setInt(2, offset);

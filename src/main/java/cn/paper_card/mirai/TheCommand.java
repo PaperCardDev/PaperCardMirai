@@ -1,6 +1,7 @@
 package cn.paper_card.mirai;
 
 import cn.paper_card.mc_command.TheMcCommand;
+import cn.paper_card.paper_card_mirai.api.AccountInfo;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -21,11 +22,11 @@ import java.util.List;
 
 class TheCommand extends TheMcCommand.HasSub {
 
-    private final @NotNull PaperCardMirai plugin;
+    private final @NotNull ThePlugin plugin;
 
     private final @NotNull Permission permission;
 
-    TheCommand(@NotNull PaperCardMirai plugin) {
+    TheCommand(@NotNull ThePlugin plugin) {
         super("paper-card-mirai");
         this.plugin = plugin;
         this.permission = this.plugin.addPermission("paper-card-mirai.command");
@@ -57,9 +58,9 @@ class TheCommand extends TheMcCommand.HasSub {
         final List<Long> qqs;
 
         try {
-            qqs = plugin.getAccountStorage().queryAllQqs();
+            qqs = plugin.getPaperCardMiraiApi().getQqAccountService().queryAllQqs();
         } catch (Exception e) {
-            plugin.handleException("", e);
+            plugin.handleException("qq account service -> query all qq", e);
             plugin.sendException(sender, e);
             return list;
         }
@@ -152,21 +153,23 @@ class TheCommand extends TheMcCommand.HasSub {
             }
 
             if (strings.length == 2) {
-                final String arg = strings[1];
-                final LinkedList<String> list = new LinkedList<>();
-                if (arg.isEmpty()) list.add("[要登录的QQ机器人的号码]");
-
-                final List<TheLoginSolver2> waitingSliderLoginSolvers = plugin.getMiraiGo().getWaitingSliderLoginSolvers();
-
-                for (final TheLoginSolver2 solver : waitingSliderLoginSolvers) {
-                    final String str = "%d".formatted(solver.getQq());
-                    if (str.startsWith(arg)) list.add(str);
-                }
-                return list;
+                return tabCompleteWaiting(strings[1], "[要登录的QQ机器人的号码]", plugin.getMiraiGo().getWaitingSliderLoginSolvers());
             }
 
             return null;
         }
+    }
+
+    @NotNull
+    private LinkedList<String> tabCompleteWaiting(@NotNull String arg, String e, List<TheLoginSolver2> solver2s) {
+        final LinkedList<String> list = new LinkedList<>();
+        if (arg.isEmpty()) list.add(e);
+
+        for (final TheLoginSolver2 solver : solver2s) {
+            final String str = "%d".formatted(solver.getQq());
+            if (str.startsWith(arg)) list.add(str);
+        }
+        return list;
     }
 
     class SmsVerify extends TheMcCommand {
@@ -250,16 +253,7 @@ class TheCommand extends TheMcCommand.HasSub {
             }
 
             if (strings.length == 2) {
-                final String arg = strings[1];
-                final LinkedList<String> list = new LinkedList<>();
-                if (arg.isEmpty()) list.add("[等待短信验证码的QQ机器人号码]");
-
-                final List<TheLoginSolver2> waitingSmsLoginSolvers = plugin.getMiraiGo().getWaitingSmsLoginSolvers();
-                for (final TheLoginSolver2 solver : waitingSmsLoginSolvers) {
-                    final String str = "%d".formatted(solver.getQq());
-                    if (str.startsWith(arg)) list.add(str);
-                }
-                return list;
+                return tabCompleteWaiting(strings[1], "[等待短信验证码的QQ机器人号码]", plugin.getMiraiGo().getWaitingSmsLoginSolvers());
             }
             return null;
         }
@@ -300,12 +294,12 @@ class TheCommand extends TheMcCommand.HasSub {
             }
 
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
-                final PaperCardMiraiApi.AccountInfo accountInfo;
+                final AccountInfo accountInfo;
 
                 // 没有指定密码，从数据库中查询
                 if (argPassword == null) {
                     try {
-                        accountInfo = plugin.getAccountStorage().queryByQq(qq);
+                        accountInfo = plugin.getPaperCardMiraiApi().getQqAccountService().queryByQq(qq);
                     } catch (Exception e) {
                         plugin.handleException("登录QQ，根据QQ查询账号信息时异常", e);
                         plugin.sendException(commandSender, e);
@@ -322,7 +316,7 @@ class TheCommand extends TheMcCommand.HasSub {
                     // 计算密码的MD5并转为HEX
                     final String md5 = Tool.encodeHex(Tool.md5Digest(argPassword.getBytes(StandardCharsets.UTF_8)));
 
-                    accountInfo = new PaperCardMiraiApi.AccountInfo(
+                    accountInfo = new AccountInfo(
                             qq,
                             null,
                             -1,
@@ -497,7 +491,7 @@ class TheCommand extends TheMcCommand.HasSub {
 
                 boolean ok;
                 try {
-                    ok = plugin.getAccountStorage().setAutoLogin(qq, this.isAdd);
+                    ok = plugin.getPaperCardMiraiApi().getQqAccountService().setAutoLogin(qq, this.isAdd);
                 } catch (Exception e) {
                     plugin.handleException("切换自动登录时异常", e);
                     plugin.sendException(commandSender, e);
@@ -557,11 +551,11 @@ class TheCommand extends TheMcCommand.HasSub {
 
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
 
-                final List<PaperCardMiraiApi.AccountInfo> list;
+                final List<AccountInfo> list;
                 final int pageSize = 1;
 
                 try {
-                    list = plugin.getAccountStorage().queryOrderByTimeDescWithPage(pageSize, pageSize * (pageNo - 1));
+                    list = plugin.getPaperCardMiraiApi().getQqAccountService().queryOrderByTimeDescWithPage(pageSize, pageSize * (pageNo - 1));
                 } catch (Exception e) {
                     plugin.handleException("查询QQ账号时异常", e);
                     plugin.sendException(commandSender, e);
@@ -582,7 +576,7 @@ class TheCommand extends TheMcCommand.HasSub {
 
                     final long cur = System.currentTimeMillis();
 
-                    for (final PaperCardMiraiApi.AccountInfo info : list) {
+                    for (final AccountInfo info : list) {
                         String state;
                         final Bot bot = Bot.findInstance(info.qq());
                         final boolean online;
@@ -713,7 +707,7 @@ class TheCommand extends TheMcCommand.HasSub {
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
                 final boolean ok;
                 try {
-                    ok = plugin.getAccountStorage().deleteByQq(qq);
+                    ok = plugin.getPaperCardMiraiApi().getQqAccountService().deleteByQq(qq);
                 } catch (Exception e) {
                     plugin.handleException("删除QQ账号时异常", e);
                     plugin.sendException(commandSender, e);
@@ -810,7 +804,7 @@ class TheCommand extends TheMcCommand.HasSub {
             plugin.getTaskScheduler().runTaskAsynchronously(() -> {
                 boolean ok;
                 try {
-                    ok = plugin.getAccountStorage().setRemark(qq, argRemark);
+                    ok = plugin.getPaperCardMiraiApi().getQqAccountService().setRemark(qq, argRemark);
                 } catch (Exception e) {
                     plugin.handleException("设置QQ账号的备注时异常", e);
                     plugin.sendException(commandSender, e);

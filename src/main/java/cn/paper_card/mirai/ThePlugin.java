@@ -1,6 +1,8 @@
 package cn.paper_card.mirai;
 
 import cn.paper_card.database.api.DatabaseApi;
+import cn.paper_card.paper_card_mirai.api.AccountInfo;
+import cn.paper_card.paper_card_mirai.api.PaperCardMiraiApi;
 import com.github.Anon8281.universalScheduler.UniversalScheduler;
 import com.github.Anon8281.universalScheduler.scheduling.schedulers.TaskScheduler;
 import net.kyori.adventure.text.Component;
@@ -10,6 +12,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.permissions.Permission;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
@@ -23,16 +26,11 @@ import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.util.List;
 
-@SuppressWarnings("unused")
-public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiApi {
+public final class ThePlugin extends JavaPlugin {
 
 
     private final @NotNull TaskScheduler taskScheduler;
 
-
-    private AccountStorageImpl accountStorage;
-
-    private DeviceInfoStorageImpl deviceInfoStorage;
 
     private final @NotNull TextComponent prefix;
 
@@ -43,8 +41,10 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
 
     private final @NotNull MiraiGo miraiGo;
 
+    private PaperCardMiraiApiImpl paperCardMiraiApi = null;
 
-    public PaperCardMirai() {
+
+    public ThePlugin() {
         final ClassLoader classLoader = this.getClassLoader();
         if (classLoader instanceof URLClassLoader urlClassLoader) {
             this.getLogger().info(urlClassLoader.toString());
@@ -95,7 +95,7 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
 
         final List<AccountInfo> ais;
         try {
-            ais = getAccountStorage().queryAutoLoginAccounts();
+            ais = getPaperCardMiraiApi().getQqAccountService().queryAutoLoginAccounts();
         } catch (Exception e) {
             this.handleException("获取自动登录账号时异常", e);
             return;
@@ -109,15 +109,27 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
     }
 
     @Override
+    public void onLoad() {
+        final DatabaseApi api = this.getServer().getServicesManager().load(DatabaseApi.class);
+        if (api == null) throw new RuntimeException("无法连接到" + DatabaseApi.class.getSimpleName());
+
+        final DatabaseApi.MySqlConnection connection = api.getRemoteMySQL().getConnectionImportant();
+        this.paperCardMiraiApi = new PaperCardMiraiApiImpl(connection);
+
+        this.getSLF4JLogger().info("注册%s...".formatted(PaperCardMiraiApi.class.getSimpleName()));
+        this.getServer().getServicesManager().register(PaperCardMiraiApi.class, this.paperCardMiraiApi, this, ServicePriority.Highest);
+    }
+
+    @NotNull PaperCardMiraiApiImpl getPaperCardMiraiApi() {
+        return this.paperCardMiraiApi;
+    }
+
+    @Override
     public void onEnable() {
         final DatabaseApi api = this.getServer().getServicesManager().load(DatabaseApi.class);
         if (api == null) {
             throw new RuntimeException("无法连接到" + DatabaseApi.class.getSimpleName());
         }
-
-        DatabaseApi.MySqlConnection mySqlConnection = api.getRemoteMySQL().getConnectionImportant();
-        this.deviceInfoStorage = new DeviceInfoStorageImpl(mySqlConnection);
-        this.accountStorage = new AccountStorageImpl(mySqlConnection);
 
         final PluginCommand command = this.getCommand("paper-card-mirai");
         assert command != null;
@@ -138,30 +150,26 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
     @Override
     public void onDisable() {
 
-        if (this.accountStorage != null) {
+        if (this.paperCardMiraiApi != null) {
             try {
-                this.accountStorage.closeTable();
+                this.paperCardMiraiApi.getQqAccountService().closeTable();
             } catch (SQLException e) {
-                this.handleException("关闭accountStorage时异常", e);
+                this.handleException("close qq account service", e);
             }
-        }
 
-
-        if (this.deviceInfoStorage != null) {
             try {
-                this.deviceInfoStorage.close();
+                this.paperCardMiraiApi.getDeviceInfoService().close();
             } catch (SQLException e) {
-                this.handleException("关闭deviceInfoStorage时异常", e);
+                this.handleException("close device info service", e);
             }
         }
 
         this.miraiGo.close();
 
         this.taskScheduler.cancelTasks(this);
-
+        this.getServer().getServicesManager().unregisterAll(this);
 
         getLogger().info("GoodBye!");
-
     }
 
 
@@ -176,18 +184,7 @@ public final class PaperCardMirai extends JavaPlugin implements PaperCardMiraiAp
         return this.taskScheduler;
     }
 
-    @Override
-    public @NotNull AccountStorage getAccountStorage() {
-        return this.accountStorage;
-    }
-
-    @Override
-    public @NotNull DeviceInfoStorage getDeviceInfoStorage() {
-        return this.deviceInfoStorage;
-    }
-
-    @Override
-    public void doLogin(@NotNull AccountInfo accountInfo, @NotNull CommandSender sender) {
+    void doLogin(@NotNull AccountInfo accountInfo, @NotNull CommandSender sender) {
         this.getMiraiGo().doLogin(accountInfo, sender);
     }
 

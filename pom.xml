@@ -101,8 +101,14 @@
 
         <dependency>
             <groupId>com.github.PaperCardDev</groupId>
-            <artifactId>database-api</artifactId>
+            <artifactId>paper-card-mirai-api</artifactId>
             <version>1.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.PaperCardDev</groupId>
+            <artifactId>database-api</artifactId>
+            <version>1.1</version>
             <scope>provided</scope>
         </dependency>
 
