@@ -255,7 +255,7 @@ class DeviceInfoServiceImpl implements DeviceInfoService {
         private @NotNull PreparedStatement getStatementQueryDevice() throws SQLException {
             if (this.statementQueryDevice == null) {
                 this.statementQueryDevice = this.connection.prepareStatement
-                        ("SELECT device FROM %s WHERE qq=? LIMIT 1".formatted(NAME));
+                        ("SELECT qq, device, remark FROM %s WHERE qq=? LIMIT 1".formatted(NAME));
             }
             return this.statementQueryDevice;
         }
